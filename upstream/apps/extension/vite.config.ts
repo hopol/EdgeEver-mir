@@ -1,0 +1,41 @@
+import { fileURLToPath, URL } from "node:url";
+import { defineConfig } from "vite";
+import extensionPackage from "./package.json";
+import { buildExtensionManifest, type ExtensionTarget } from "./manifest";
+
+const target: ExtensionTarget = process.env.EDGE_EVER_EXTENSION_TARGET === "firefox"
+  ? "firefox"
+  : "chromium";
+
+export default defineConfig({
+  root: fileURLToPath(new URL(".", import.meta.url)),
+  plugins: [
+    {
+      name: "edgeever-extension-manifest",
+      generateBundle() {
+        this.emitFile({
+          type: "asset",
+          fileName: "manifest.json",
+          source: `${JSON.stringify(buildExtensionManifest(target, extensionPackage.version), null, 2)}\n`,
+        });
+      },
+    },
+  ],
+  build: {
+    outDir: target === "firefox" ? "dist-firefox" : "dist",
+    emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        popup: fileURLToPath(new URL("./popup.html", import.meta.url)),
+        options: fileURLToPath(new URL("./options.html", import.meta.url)),
+        background: fileURLToPath(new URL("./src/background.ts", import.meta.url)),
+        capture: fileURLToPath(new URL("./src/capture.ts", import.meta.url)),
+      },
+      output: {
+        entryFileNames: "assets/[name].js",
+        chunkFileNames: "assets/[name]-[hash].js",
+        assetFileNames: "assets/[name]-[hash][extname]",
+      },
+    },
+  },
+});
