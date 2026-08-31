@@ -12,6 +12,7 @@ declare const __EDGEEVER_RELEASE_SUMMARY__: {
 declare const __EDGEEVER_DEPLOYMENT_TRIGGER__: string;
 declare const __EDGEEVER_DEPLOYMENT_METHOD__: string;
 declare const __EDGEEVER_DEVELOPMENT_PROFILE__: "" | "local" | "demo";
+declare const __EDGEEVER_DESKTOP_BUILD__: boolean;
 
 interface EdgeEverDesktopBridge {
   isAvailable: boolean;
@@ -30,7 +31,17 @@ interface EdgeEverDesktopBridge {
   >;
   recordRendererError(details: DesktopRendererErrorDetails): Promise<{ recorded: true }>;
   openRendererIssue(details: DesktopRendererErrorDetails): Promise<{ opened: true }>;
+  rendererBootstrapReady(): void;
   sidecarStatus(): Promise<{ available: boolean; path: string; scope: string }>;
+  systemInfo(): Promise<{
+    appVersion: string;
+    platform: string;
+    architecture: string;
+    osVersion: string;
+    osRelease: string;
+    electron: string;
+    chrome: string;
+  }>;
   setAccountScope(accountId: string | null): Promise<{ ready: true; scope: string }>;
   updateStatus(): Promise<DesktopUpdateStatus>;
   checkUpdate(): Promise<DesktopUpdateStatus>;

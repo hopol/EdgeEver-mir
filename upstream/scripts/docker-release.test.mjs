@@ -58,6 +58,9 @@ describe("Docker release contract", () => {
     expect(dockerfile).toContain("COPY patches patches");
     expect(dockerfile).toContain("COPY docs docs");
     expect(dockerfile).toContain(
+      "COPY packages/wrangler/package.json packages/wrangler/package.json",
+    );
+    expect(dockerfile).toContain(
       "COPY release-summary.json release-summary.json",
     );
     expect(dockerfile).toContain(
@@ -68,12 +71,17 @@ describe("Docker release contract", () => {
     expect(dockerfile).toContain("USER bun");
     expect(dockerfile).toContain('VOLUME ["/data"]');
     expect(dockerfile).toContain("HEALTHCHECK");
+    expect(dockerfile).toContain("ARG EDGE_EVER_BUILD_ID=unknown");
+    expect(dockerfile).toContain("EDGE_EVER_BUILD_ID=${EDGE_EVER_BUILD_ID}");
   });
 
   test("keeps authentication explicit in Compose", () => {
     const compose = readProjectFile("compose.yaml");
     expect(compose).toContain(
       'EDGE_EVER_AUTH_PASSWORD: "${EDGE_EVER_AUTH_PASSWORD:?',
+    );
+    expect(compose).toContain(
+      'EDGE_EVER_CONTAINER_IMAGE: "${EDGE_EVER_IMAGE:-ghcr.io/tianma-if/edgeever}"',
     );
     expect(compose).toContain("edgeever-data:/data");
     expect(compose).toContain("no-new-privileges:true");
@@ -111,6 +119,8 @@ describe("Docker release contract", () => {
     expect(workflow).not.toContain("releases/tags/${RELEASE_TAG}");
     expect(workflow).toContain("docker logout ghcr.io");
     expect(workflow).toContain("docker buildx imagetools inspect");
+    expect(workflow).toContain('docker build --build-arg EDGE_EVER_BUILD_ID="${GITHUB_SHA}"');
+    expect(workflow).toContain("EDGE_EVER_BUILD_ID=${{ github.sha }}");
     expect(workflow).not.toContain("TCR_IMAGE_NAME");
     expect(workflow).not.toContain("TENCENT_TCR_USERNAME");
 
