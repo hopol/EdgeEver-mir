@@ -2,12 +2,13 @@
 
 [![GitHub Stars](https://img.shields.io/github/stars/tianma-if/edgeever?style=social)](https://github.com/tianma-if/edgeever/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/tianma-if/edgeever?style=social)](https://github.com/tianma-if/edgeever/network/members)
+[![Product Hunt](https://img.shields.io/badge/Product%20Hunt-Pre--Launch-ea532a?style=social&logo=product-hunt)](https://www.producthunt.com/products/edgeever?launch=edgeever&utm_source=badge-featured&utm_medium=badge&utm_campaign=edgeever)
 
 简体中文 | [English](README.md)
 
-> **EdgeEver：开源、原生支持 AI、可自由部署的自托管「印象笔记」替代方案。**
+> **EdgeEver：开源、原生支持 AI、可自由部署的自托管知识库与「印象笔记」替代方案。**
 
-EdgeEver 是一款现代化的开源笔记工作区。它为你找回经典印象笔记的三栏高效体验，同时具备完全开放的数据架构与原生 AI Agent 联动能力，让个人知识沉淀更轻量、更自由。
+EdgeEver 是一款现代化的开源笔记与个人知识库工作区。它为你找回经典印象笔记的三栏高效体验，同时具备完全开放的数据架构与原生 AI Agent 联动能力，让个人知识沉淀更轻量、更自由。
 
 > 💡 **终身免服务器，100% 免费**
 > EdgeEver 可以免费运行在 Cloudflare 配额内，无需购买或维护服务器；希望使用 VPS、NAS 或家庭服务器的用户，也可以通过 Docker 部署同一套应用。
@@ -33,6 +34,17 @@ EdgeEver 是一款现代化的开源笔记工作区。它为你找回经典印�
 
 公开演示环境会在每天凌晨 3:00（北京时间）自动重置并恢复示例笔记，请不要保存私密内容。
 
+## 客户端下载
+
+<p>
+  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="assets/readme/platforms/macos.svg" alt="下载 macOS 客户端" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="assets/readme/platforms/windows.svg" alt="下载 Windows 客户端" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://play.google.com/store/apps/details?id=org.edgeever.mobile"><img src="assets/readme/platforms/google-play.svg" alt="从 Google Play 下载 Android 客户端" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://apps.apple.com/us/app/edgeever/id6792625631"><img src="assets/readme/platforms/app-store.svg" alt="从 App Store 下载 iOS 客户端" width="40" height="40" /></a>
+</p>
+
+iOS 客户端需要使用非中国大陆区 Apple ID 下载。
+
 ## 功能
 
 - **自由选择部署方式**：既可免费运行于 Cloudflare Serverless，也可通过 Docker 部署到 VPS、NAS 或家庭服务器。按 Cloudflare 免费存储额度估算，个人部署可容纳约 15 万条短笔记和约 5 万张图片；Docker 存储可按需扩展，轻松承载百万级笔记与海量图片。
@@ -40,7 +52,7 @@ EdgeEver 是一款现代化的开源笔记工作区。它为你找回经典印�
 - **无损 ZIP 打包与无缝迁移**：一键打包导出包含 Markdown、Front Matter、嵌套目录及附件的完整档案，同时保留历史版本与结构化数据，方便在不同实例间完整还原。
 - **原生 AI Agent 智脑联动**：内置 MCP（Model Context Protocol）协议，支持 Claude Code、Codex、Antigravity 等 AI 助手直接读取与整理笔记，也可与 Notion Database、飞书多维表格轻松打通。
 - **接入自己的 AI 模型**：支持添加多个 OpenAI、Anthropic、Gemini 兼容服务与第三方中转平台，在编辑器中随时对全文或选区进行智能总结、要点提炼、语法校对、翻译与续写润色。
-- **插件扩展能力**：支持从插件市场安装客户端插件与主题，扩展笔记操作、编辑器命令和自定义面板等能力。
+- **丰富的插件 API**：可通过[插件开发文档](docs/plugin-development.zh-CN.md)扩展 EdgeEver。
 - **多端无缝同步，无设备限制**：自托管数据无商业限制，摆脱免费账号仅限 2 台设备的束缚，在 PC、平板与手机上随心同步。
 - **经典三栏布局与专注模式**：笔记本树、笔记列表与编辑区一目了然；桌面端一键开启专注模式，让思绪尽情铺满屏幕。
 - **无限层级笔记本**：轻松构建清晰的多级目录结构。
@@ -48,6 +60,7 @@ EdgeEver 是一款现代化的开源笔记工作区。它为你找回经典印�
 - **优雅的双视图编辑**：桌面端支持在富文本与 Markdown 源码视图之间自由切换。
 - **单篇笔记便捷导出**：可将当前笔记直接导出为 Markdown、HTML 或 PDF，方便独立保存、分享与发布。
 - **Mermaid 架构图与流程图渲染**：原生支持 Mermaid 代码块渲染，视图切换时完整保留可编辑源码，让绘制逻辑图表更直观。
+- **可视化图表笔记**：Web 与桌面端支持创建、编辑思维导图、流程图和架构图，提供语义组件、系统边界、连线说明、自动布局、历史版本及 PNG/SVG 导出；Android 与 iOS App 保留同一份图表数据，并提供语义化只读视图。详见[可视化图表笔记设计说明](docs/visual-diagram-notes.zh-CN.md)。
 - **笔记历史版本回溯**：自动记录修改历史，随时查阅与还原过往版本。
 - **公开笔记分享**：支持公开分享笔记，并可随时取消分享。
 - **移动 App 微信公众号文章剪藏**：在手机上将微信公众号文章分享至 EdgeEver，即可提取正文并保存为可继续编辑的笔记。
@@ -133,17 +146,6 @@ EdgeEver 官方容器镜像托管于 GitHub Container Registry（GHCR）。部�
   <a href="https://addons.mozilla.org/zh-CN/firefox/addon/edgeever-web-clipper/"><img src="https://raw.githubusercontent.com/alrra/browser-logos/58881b84c4d73adc03c06fa2c275a7abee02d935/src/firefox/firefox.svg" alt="为 Firefox 安装 EdgeEver 网页裁剪插件" width="36" height="36" /></a>
 </p>
 
-## 客户端下载
-
-<p>
-  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="apps/web/public/icons/platforms/macos.svg" alt="下载 macOS 客户端" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="apps/web/public/icons/platforms/windows.svg" alt="下载 Windows 客户端" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://play.google.com/store/apps/details?id=org.edgeever.mobile"><img src="apps/web/public/icons/platforms/google-play.svg" alt="从 Google Play 下载 Android 客户端" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://apps.apple.com/us/app/edgeever/id6792625631"><img src="apps/web/public/icons/platforms/app-store.svg" alt="从 App Store 下载 iOS 客户端" width="40" height="40" /></a>
-</p>
-
-iOS 客户端需要使用非中国大陆区 Apple ID 下载。
-
 ## 社区与反馈
 
 - Bug、功能建议和部署问题请优先提交 [GitHub Issues](https://github.com/tianma-if/edgeever/issues)，方便后续用户检索和复用解决方案。
@@ -158,6 +160,10 @@ iOS 客户端需要使用非中国大陆区 Apple ID 下载。
 <p align="center">
   <img src="assets/wechat-group-qr.jpg" alt="EdgeEver AI 交流群二维码" width="260" />
 </p>
+
+## 插件与主题
+
+EdgeEver 的 Web 与桌面端支持安装在当前设备的插件和无代码主题，可从插件市场、GitHub 或 Manifest 地址安装。开发者可使用 `@edgeever/plugin-api`，详情参阅[插件开发文档](docs/plugin-development.zh-CN.md)。
 
 ## 技术栈
 
@@ -177,6 +183,8 @@ iOS 客户端需要使用非中国大陆区 Apple ID 下载。
 bun install
 bun run dev
 ```
+
+本地开发默认自动登录，首次账号为 `owner` / `edgeever-local-dev`；测试登录页可主动退出登录。
 
 ## 目录结构
 

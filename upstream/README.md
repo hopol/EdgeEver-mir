@@ -2,12 +2,13 @@
 
 [![GitHub Stars](https://img.shields.io/github/stars/tianma-if/edgeever?style=social)](https://github.com/tianma-if/edgeever/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/tianma-if/edgeever?style=social)](https://github.com/tianma-if/edgeever/network/members)
+[![Product Hunt](https://img.shields.io/badge/Product%20Hunt-Pre--Launch-ea532a?style=social&logo=product-hunt)](https://www.producthunt.com/products/edgeever?launch=edgeever&utm_source=badge-featured&utm_medium=badge&utm_campaign=edgeever)
 
 [简体中文](README.zh-CN.md) | English
 
-> **EdgeEver: An open-source, AI-native, and portable self-hosted Evernote alternative.**
+> **EdgeEver: An open-source, AI-native knowledge base & portable Evernote alternative.**
 
-EdgeEver is a modern, open-source notes workspace built for effortless knowledge management. It revives the beloved Evernote-style three-pane layout while offering an open data architecture and seamless AI Agent integration for complete ownership and smart productivity.
+EdgeEver is a modern, open-source notes and knowledge base workspace. It revives the beloved Evernote-style three-pane layout while offering an open data architecture and seamless AI Agent integration for complete ownership and smart productivity.
 
 > 💡 **Serverless & 100% Free Forever**
 > EdgeEver can run within Cloudflare's free quotas with no server purchase or VPS maintenance. Users who prefer a VPS, NAS, or home server can deploy the same application with Docker.
@@ -33,6 +34,17 @@ Many long-time **Evernote** users simply want a **reliable, open, and fast** per
 
 The public demo resets every day at 3:00 AM (China Standard Time) and restores sample notes. Do not store private content there.
 
+## Client Downloads
+
+<p>
+  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="assets/readme/platforms/macos.svg" alt="Download EdgeEver for macOS" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="assets/readme/platforms/windows.svg" alt="Download EdgeEver for Windows" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://play.google.com/store/apps/details?id=org.edgeever.mobile"><img src="assets/readme/platforms/google-play.svg" alt="Download EdgeEver for Android from Google Play" width="40" height="40" /></a>&nbsp;&nbsp;
+  <a href="https://apps.apple.com/us/app/edgeever/id6792625631"><img src="assets/readme/platforms/app-store.svg" alt="Download EdgeEver for iOS from the App Store" width="40" height="40" /></a>
+</p>
+
+The iOS app requires an Apple ID from outside mainland China.
+
 ## Features
 
 - **Deploy Your Way**: Run on Cloudflare's free serverless platform or with Docker on a VPS, NAS, or home server. Based on Cloudflare's free storage allowances, a personal deployment can hold roughly 150,000 short notes and 50,000 images; Docker storage scales on demand to easily support millions of notes and a vast image library.
@@ -40,7 +52,7 @@ The public demo resets every day at 3:00 AM (China Standard Time) and restores s
 - **Lossless ZIP Backup & Portability**: Export your complete library as a clean archive containing Markdown, Front Matter, nested folders, relative attachment links, and version histories for instant restoration anywhere.
 - **Native AI Agent Synergy**: Deep integration with Model Context Protocol (MCP) allows AI tools like Claude Code, Codex, and Antigravity to read, organize, and summarize your notes, or sync seamlessly with Notion and Feishu Bitable.
 - **Bring Your Own AI Models**: Connect OpenAI, Anthropic, or Gemini-compatible services and third-party API relays to empower your editor with smart note summarization, key point extraction, proofreading, translation, and text continuation on full notes or selected text.
-- **Plugin Extensibility**: Install client plugins and themes from the Plugin Marketplace to extend note actions, editor commands, custom panels, and more.
+- **Rich Plugin API**: Extend EdgeEver with the [Plugin API](docs/plugin-development.md).
 - **Unlimited Multi-Device Sync**: No commercial device caps or paywalls. Enjoy seamless synchronization across PC, tablet, and mobile via web, PWA, or browser.
 - **Classic Three-Pane Layout & Focus Mode**: Clean navigation featuring notebook trees, note lists, and an expansive editor, with a desktop focus mode to eliminate distractions.
 - **Unlimited Nested Notebooks**: Organize your knowledge with arbitrary folder depth.
@@ -48,6 +60,7 @@ The public demo resets every day at 3:00 AM (China Standard Time) and restores s
 - **Seamless Dual-View Editor**: Switch effortlessly between intuitive rich text editing and Markdown source code on desktop.
 - **Convenient Single-Note Export**: Export the current note directly as Markdown, HTML, or PDF for standalone storage, sharing, or publishing.
 - **Native Mermaid Diagram Rendering**: Render clear flowcharts, sequence diagrams, and mind maps directly in notes, preserving clean, editable source code across Markdown and rich text views.
+- **Visual Diagram Notes**: Create and edit mind maps, flowcharts, and architecture diagrams on Web and desktop with semantic components, system boundaries, labeled connections, automatic layout, revision history, and PNG/SVG export. The Android and iOS apps preserve the same diagram data and render a semantic read-only view. See the [visual diagram notes design](docs/visual-diagram-notes.md).
 - **Revision History**: Inspect and restore previous iterations of your notes with built-in version tracking.
 - **Public Note Sharing**: Share a note publicly and stop sharing it at any time.
 - **WeChat Article Clipping on Mobile**: Share a WeChat Official Account article to EdgeEver on your phone to extract its content and save it as an editable note.
@@ -139,17 +152,6 @@ The Web Clipper is officially published for Chrome, Microsoft Edge, and Firefox.
   <a href="https://addons.mozilla.org/firefox/addon/edgeever-web-clipper/"><img src="https://raw.githubusercontent.com/alrra/browser-logos/58881b84c4d73adc03c06fa2c275a7abee02d935/src/firefox/firefox.svg" alt="Install EdgeEver Web Clipper for Firefox" width="36" height="36" /></a>
 </p>
 
-## Client Downloads
-
-<p>
-  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="apps/web/public/icons/platforms/macos.svg" alt="Download EdgeEver for macOS" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://github.com/tianma-if/edgeever/releases/latest"><img src="apps/web/public/icons/platforms/windows.svg" alt="Download EdgeEver for Windows" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://play.google.com/store/apps/details?id=org.edgeever.mobile"><img src="apps/web/public/icons/platforms/google-play.svg" alt="Download EdgeEver for Android from Google Play" width="40" height="40" /></a>&nbsp;&nbsp;
-  <a href="https://apps.apple.com/us/app/edgeever/id6792625631"><img src="apps/web/public/icons/platforms/app-store.svg" alt="Download EdgeEver for iOS from the App Store" width="40" height="40" /></a>
-</p>
-
-The iOS app requires an Apple ID from outside mainland China.
-
 ## Community and Feedback
 
 - Bugs, feature requests, and deployment issues: [GitHub Issues](https://github.com/tianma-if/edgeever/issues)
@@ -160,6 +162,10 @@ The iOS app requires an Apple ID from outside mainland China.
 Welcome to the EdgeEver community. Join us to discuss the EdgeEver experience, real-world AI Agent applications, cost-effective or free AI resources, and automation workflows.
 
 👉 [Join the EdgeEver Telegram group](https://t.me/+wwUx1BYLrIdiZjY1)
+
+## Plugins and Themes
+
+EdgeEver supports device-local plugins and code-free themes on Web and desktop, installable from the Plugin Marketplace, GitHub, or a Manifest URL. Developers can use `@edgeever/plugin-api`; see the [plugin development guide](docs/plugin-development.md).
 
 ## Tech Stack
 
@@ -179,6 +185,8 @@ Welcome to the EdgeEver community. Join us to discuss the EdgeEver experience, r
 bun install
 bun run dev
 ```
+
+Local development signs in automatically; fresh databases use `owner` / `edgeever-local-dev`. Log out to test the login screen.
 
 ## Project Structure
 
