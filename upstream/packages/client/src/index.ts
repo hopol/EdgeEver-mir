@@ -1179,8 +1179,16 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
         method: "DELETE",
       }),
 
-    getMarkdownExportPage: (offset = 0, limit = 50) =>
-      request<MarkdownExportPage>(`/api/v1/exports/markdown?offset=${offset}&limit=${limit}`),
+    getMarkdownExportPage: (offset = 0, limit = 50, memoIds?: string[]) => {
+      const search = new URLSearchParams({
+        offset: String(offset),
+        limit: String(limit),
+      });
+      if (memoIds && memoIds.length > 0) {
+        search.set("ids", memoIds.join(","));
+      }
+      return request<MarkdownExportPage>(`/api/v1/exports/markdown?${search.toString()}`);
+    },
 
     getJsonBackupPage: (offset = 0, limit = 25) =>
       request<JsonBackupPage>(`/api/v1/backups/json?offset=${offset}&limit=${limit}`),
@@ -1237,6 +1245,48 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
     ) => requestArrayBuffer(
       `/api/v1/plugins/github/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/releases/${encodeURIComponent(releaseTag)}/assets/${encodeURIComponent(assetName)}`,
     ),
+
+    downloadGithubPluginAssetById: (
+      owner: string,
+      repository: string,
+      assetId: string,
+      assetName: "manifest.json" | "main.js" | "styles.css",
+    ) => requestArrayBuffer(
+      `/api/v1/plugins/github/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/assets/${encodeURIComponent(assetId)}/${encodeURIComponent(assetName)}`,
+    ),
+
+    getGithubPluginRepositoryManifest: async (owner: string, repository: string) => {
+      const path = `/api/v1/plugins/github/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/manifest`;
+      const { context, response } = await send(path, undefined, { setJsonContentType: false });
+      if (!response.ok) await throwRequestError(context, response, "GitHub plugin manifest request failed");
+      return response.text();
+    },
+
+    getGithubPluginLatestManifest: async (owner: string, repository: string) => {
+      const path = `/api/v1/plugins/github/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/latest-manifest`;
+      const { context, response } = await send(path, undefined, { setJsonContentType: false });
+      if (!response.ok) await throwRequestError(context, response, "GitHub plugin latest-release manifest request failed");
+      return response.text();
+    },
+
+    getGithubPluginRelease: async (owner: string, repository: string, releaseTag: string) => {
+      const path = `/api/v1/plugins/github/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/releases/tags/${encodeURIComponent(releaseTag)}`;
+      const { context, response } = await send(path, undefined, { setJsonContentType: false });
+      if (response.status === 404) return null;
+      if (!response.ok) await throwRequestError(context, response, "GitHub plugin release request failed");
+      return response.json() as Promise<{
+        tag_name: string;
+        draft: boolean;
+        assets: Array<{
+          id: number;
+          name: string;
+          size: number;
+          url: string;
+          browser_download_url: string;
+          digest?: string;
+        }>;
+      }>;
+    },
 
     uploadMemoResource: (memoId: string, file: Blob | FormData) => {
       // Small files do not benefit from an upload session's three round trips.
