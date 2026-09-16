@@ -26,7 +26,7 @@ on:
         description: App Store marketing version to inspect
         required: false
         type: string
-        default: "1.65.0"
+        default: "1.74.0"
       app_store_build_id:
         description: App Store Connect build resource ID to inspect
         required: false
@@ -357,18 +357,19 @@ jobs:
 
       - name: Submit App Store build for review
         env:
-          APP_STORE_BUILD_NUMBER: "46"
+          APP_STORE_BUILD_NUMBER: "49"
           APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.EDGEEVER_APPLE_API_ISSUER }}
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.EDGEEVER_APPLE_API_KEY_ID }}
           APP_STORE_CONNECT_API_KEY_P8_BASE64: ${{ secrets.EDGEEVER_APPLE_API_KEY_BASE64 }}
           APP_STORE_RELEASE_NOTES_ZH: |-
-            可从可见标签筛选笔记，列表按精确标签匹配，相近名称的标签不再混入结果。
-            打开大型思维导图时不再缩成无法阅读的全图，画布铺满剩余视口，支持捏合缩放并点选主题。
-            在原生客户端中更一致地呈现可视化笔记，图表阅读与布局更清晰。
+            iOS 的数学公式、图片画廊和分隔线与网页编辑器对齐，笔记 Markdown 往返一致，货币金额中的美元符号也不会被误当成公式。
+            应用内界面支持日文。
           APP_STORE_RELEASE_NOTES_EN: |-
-            Filter notes from a visible tag. Lists match the exact tag, so similarly named tags no longer leak into the result.
-            Large mind maps open at a readable size, fill the remaining viewport, pinch-zoom, and focus a topic on tap.
-            Render visual notes more consistently in the native viewer, with clearer diagram reading and layout.
+            Keep iOS math formulas, image galleries, and merge dividers aligned with the Web editor so notes round-trip the same Markdown, including currency dollar signs.
+            Add Japanese as an in-app language.
+          APP_STORE_RELEASE_NOTES_JA: |-
+            iOS の数式、画像ギャラリー、区切り線を Web エディタと同じ文書構造に揃え、Markdown の往復を一致させ、通貨のドル記号も数式と誤認しません。
+            アプリ内の表示言語に日本語を追加しました。
           APP_STORE_VERSION: ${{ inputs.app_store_version }}
         run: fastlane ios submit_review
         working-directory: apps/ios

@@ -39,6 +39,7 @@ const MOBILE_LOCALE_OPTIONS: Array<{ label: string; value: MobileLocalePreferenc
   { label: "跟随系统", value: "system" },
   { label: "简体中文", value: "zh-CN" },
   { label: "English", value: "en-US" },
+  { label: "日本語", value: "ja" },
 ];
 type SettingsTab = "general" | "account" | "system";
 export type MobileLocaleMode = MobileLocalePreference;
@@ -487,7 +488,7 @@ const getMobileSystemInfoText = (localePreference: MobileLocaleMode) =>
         build: "Build",
         client: "Client",
         clientAheadOfInstanceCloudflare: "This client is newer than the connected cloud instance. You can wait for the daily automatic instance update, or run the Update deployed EdgeEver workflow.",
-        clientAheadOfInstanceDocker: "This client is newer than the connected cloud instance. You can wait for the daily automatic instance update, or run update.sh on the instance.",
+        clientAheadOfInstanceDocker: "This client is newer than the connected cloud instance. You can wait for the daily automatic instance update, or run ./update.sh in the install directory (default ~/edgeever).",
         clientAheadOfInstanceUnknown: "This client is newer than the connected cloud instance. You can wait for the daily automatic instance update, or update the instance manually.",
         clientDescription: "The EdgeEver app and runtime environment on this device.",
         clientSection: "Current client",
@@ -530,7 +531,7 @@ const getMobileSystemInfoText = (localePreference: MobileLocaleMode) =>
         build: "构建",
         client: "客户端",
         clientAheadOfInstanceCloudflare: "当前客户端版本高于云端实例。可等待每天自动更新，或手动运行 Update deployed EdgeEver 工作流。",
-        clientAheadOfInstanceDocker: "当前客户端版本高于云端实例。可等待每天自动更新，或手动执行 update.sh。",
+        clientAheadOfInstanceDocker: "当前客户端版本高于云端实例。可等待每天自动更新，或在安装目录执行 ./update.sh（默认 ~/edgeever）。",
         clientAheadOfInstanceUnknown: "当前客户端版本高于云端实例。可等待每天自动更新，也可手动更新实例。",
         clientDescription: "这台设备上的 EdgeEver 应用与运行环境。",
         clientSection: "当前客户端",

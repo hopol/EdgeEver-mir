@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, session, net, protocol, shell, dialog, safeStorage, clipboard, powerMonitor } from "electron";
+import { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, session, net, protocol, shell, dialog, safeStorage, clipboard, powerMonitor, desktopCapturer, screen } from "electron";
 import { createReadStream, existsSync } from "node:fs";
 import { appendFile, mkdir, open, readdir, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -29,6 +29,7 @@ import { isAllowedPrintPreviewUrl } from "./window-open-policy.mjs";
 import { showWindow } from "./window-visibility.mjs";
 import { trayIconPath } from "./tray-icon.mjs";
 import { writeRichClipboard } from "./clipboard-write.mjs";
+import { captureScreenToNote, createScreenshotCaptureGuard, screenshotImportIpcPayload, writeScreenshotTempPath } from "./screenshot-capture.mjs";
 import { LocalDataResetError, scheduleMacLocalDataReset } from "./local-data-reset.mjs";
 import { buildDesktopDiagnosticIssueUrl, normalizeDesktopDiagnostic } from "./desktop-diagnostics.mjs";
 import { createRendererStartupGuard } from "./renderer-startup-guard.mjs";
@@ -41,6 +42,7 @@ import {
 } from "./windows-update-trust.mjs";
 import electronUpdater from "electron-updater";
 import { createPluginPublicNetworkRuntime } from "./plugin-public-network.mjs";
+import { createAiDirectRuntime } from "./ai-direct.mjs";
 import { shouldQuitAfterAllWindowsClosed } from "./window-lifecycle.mjs";
 import {
   DESKTOP_APP_ENTRY_URL,
@@ -130,6 +132,7 @@ let rendererStartupFailureDialogOpen = false;
 let rendererStartupGuard = null;
 let rendererUnresponsiveTimer = null;
 const pluginPublicNetwork = createPluginPublicNetworkRuntime();
+const aiDirect = createAiDirectRuntime();
 let rendererUnresponsiveDialogOpen = false;
 let recoveredAfterAbnormalExit = false;
 let usePrivateAppProtocol = false;
@@ -504,6 +507,9 @@ const importMarkdownFile = async (filePath) => {
 };
 
 let pendingMarkdownImport = null;
+let pendingScreenshotImport = null;
+const screenshotCaptureGuard = createScreenshotCaptureGuard();
+const sentScreenshotCaptureIds = new Set();
 let rendererReady = false;
 
 const flushPendingMarkdownImport = () => {
@@ -511,6 +517,68 @@ const flushPendingMarkdownImport = () => {
   const payload = pendingMarkdownImport;
   pendingMarkdownImport = null;
   mainWindow.webContents.send("desktop:import-markdown", payload);
+};
+
+const sendScreenshotImport = (payload) => {
+  const ipcPayload = screenshotImportIpcPayload(payload);
+  if (!ipcPayload.bytes.byteLength) return;
+  if (ipcPayload.captureId && sentScreenshotCaptureIds.has(ipcPayload.captureId)) return;
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isLoading() || !rendererReady) {
+    pendingScreenshotImport = ipcPayload;
+    return;
+  }
+  pendingScreenshotImport = null;
+  if (ipcPayload.captureId) sentScreenshotCaptureIds.add(ipcPayload.captureId);
+  mainWindow.webContents.send("desktop:import-screenshot", ipcPayload);
+};
+
+const flushPendingScreenshotImport = () => {
+  if (!pendingScreenshotImport || !rendererReady || !mainWindow || mainWindow.isDestroyed()) return;
+  const payload = pendingScreenshotImport;
+  pendingScreenshotImport = null;
+  if (!payload.bytes?.byteLength) return;
+  if (payload.captureId && sentScreenshotCaptureIds.has(payload.captureId)) return;
+  if (payload.captureId) sentScreenshotCaptureIds.add(payload.captureId);
+  mainWindow.webContents.send("desktop:import-screenshot", payload);
+};
+
+const captureScreenshotToNote = async () => {
+  if (!screenshotCaptureGuard.tryBegin()) return;
+  const copy = desktopMenuCopy(app.getLocale());
+  const wasVisible = Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible());
+  const revealWindow = () => {
+    if (process.platform === "darwin") app.show();
+    showWindow(mainWindow);
+  };
+  try {
+    if (process.platform === "darwin") app.hide();
+    else if (wasVisible) mainWindow.hide();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const captured = await captureScreenToNote({
+      platform: process.platform,
+      locale: app.getLocale(),
+      outputPath: process.platform === "darwin" ? writeScreenshotTempPath(app.getPath("temp")) : undefined,
+      desktopCapturer,
+      screen,
+    });
+    if (!captured) {
+      if (wasVisible) revealWindow();
+      return;
+    }
+    revealWindow();
+    sendScreenshotImport(captured);
+  } catch (error) {
+    if (wasVisible) revealWindow();
+    void writeDiagnostic("screenshot.failed", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    await dialog.showMessageBox({
+      type: "warning",
+      message: copy.screenshotFailed,
+    });
+  } finally {
+    screenshotCaptureGuard.end();
+  }
 };
 
 const flushPendingDesktopCommands = () => {
@@ -593,8 +661,7 @@ const createTray = () => {
   tray.setToolTip("EdgeEver");
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: copy.show, click: () => showWindow(mainWindow) },
-    { label: copy.syncNow, click: () => sendDesktopCommand("sync-now") },
-    { label: copy.backupNow, click: () => sendDesktopCommand("backup-now") },
+    { label: copy.screenshotToNote, click: () => void captureScreenshotToNote() },
     ...(updateState === "downloaded" ? [{ label: copy.restartToUpdate, click: () => installDownloadedUpdate() }] : []),
     { type: "separator" },
     { label: copy.quit, click: () => { isQuitting = true; app.quit(); } },
@@ -1326,6 +1393,7 @@ const startApplication = async () => {
     rendererReady = true;
     flushPendingDesktopCommands();
     flushPendingMarkdownImport();
+    flushPendingScreenshotImport();
     flushPendingScheduledTaskRuns();
   });
   ipcMain.on("desktop:renderer-bootstrap-ready", (event) => {
@@ -1356,6 +1424,30 @@ const startApplication = async () => {
   });
   ipcMain.on("desktop:cancel-public-network-fetch", (event, requestId) => {
     if (event.sender === mainWindow?.webContents && typeof requestId === "string") pluginPublicNetwork.cancel(requestId);
+  });
+  ipcMain.handle("desktop:ai-direct-open", async (event, requestId, input) => {
+    if (event.sender !== mainWindow?.webContents) throw new Error("AI provider requests must come from the main window");
+    const sender = event.sender;
+    return aiDirect.open(requestId, input, {
+      onData: (bytes) => {
+        if (sender.isDestroyed()) return;
+        sender.send("desktop:ai-direct-chunk", requestId, { type: "data", bytes });
+      },
+      onEnd: () => {
+        if (sender.isDestroyed()) return;
+        sender.send("desktop:ai-direct-chunk", requestId, { type: "end" });
+      },
+      onError: (error) => {
+        if (sender.isDestroyed()) return;
+        sender.send("desktop:ai-direct-chunk", requestId, {
+          type: "error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      },
+    });
+  });
+  ipcMain.on("desktop:ai-direct-cancel", (event, requestId) => {
+    if (event.sender === mainWindow?.webContents && typeof requestId === "string") aiDirect.cancel(requestId);
   });
   ipcMain.handle("desktop:sync-scheduled-tasks", async (event, tasks) => {
     if (event.sender !== mainWindow?.webContents) throw new Error("Scheduled tasks must come from the main window");

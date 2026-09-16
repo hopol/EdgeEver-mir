@@ -301,9 +301,10 @@ struct SettingsView: View {
                     description: env.preferences.t("切换产品界面的显示语言。", en: "Switch the product UI language.")
                 ) {
                     Menu {
-                        Button(env.preferences.t("跟随系统", en: "System")) { env.preferences.localeCode = "system" }
+                        Button(env.preferences.t("跟随系统", en: "System", ja: "システムに合わせる")) { env.preferences.localeCode = "system" }
                         Button("简体中文") { env.preferences.localeCode = "zh-CN" }
                         Button("English") { env.preferences.localeCode = "en-US" }
+                        Button("日本語") { env.preferences.localeCode = "ja" }
                     } label: {
                         HStack {
                             Text(localeLabel)
@@ -513,7 +514,8 @@ struct SettingsView: View {
         switch env.preferences.localeCode {
         case "zh-CN": return "简体中文"
         case "en-US": return "English"
-        default: return env.preferences.t("跟随系统", en: "System")
+        case "ja": return "日本語"
+        default: return env.preferences.t("跟随系统", en: "System", ja: "システムに合わせる")
         }
     }
 
@@ -530,8 +532,8 @@ struct SettingsView: View {
             )
         case "self-hosted-bun":
             return env.preferences.t(
-                "当前客户端版本高于云端实例。可等待每天自动更新，或手动执行 update.sh。",
-                en: "This client is newer than the connected cloud instance. You can wait for the daily automatic instance update, or run update.sh on the instance."
+                "当前客户端版本高于云端实例。可等待每天自动更新，或在安装目录执行 ./update.sh（默认 ~/edgeever）。",
+                en: "This client is newer than the connected cloud instance. You can wait for the daily automatic instance update, or run ./update.sh in the install directory (default ~/edgeever)."
             )
         default:
             return env.preferences.t(

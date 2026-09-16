@@ -41,20 +41,30 @@ import {
 } from "@/lib/ai-attachments";
 import {
   aiTones,
+  buildAiAssistantLastActionPreference,
   buildAiAssistantRequest,
   buildAiRefinementInstruction,
+  getAiAssistantLastActionScope,
   getDefaultAiAction,
   getDefaultTargetLanguage,
   promptAllowsAppend,
   promptAllowsReplace,
   promptNeedsTargetLanguage,
   promptNeedsTone,
+  readStoredAiAssistantLastActionPreference,
+  readStoredAiAssistantMode,
   resolveAiAssistantComposerInput,
+  resolveAiAssistantOpenAction,
   targetLanguages,
+  writeStoredAiAssistantLastActionPreference,
+  writeStoredAiAssistantMode,
   type AiAssistantAction,
+  type AiAssistantMode,
   type AiTone,
   type TargetLanguage,
 } from "@/lib/ai-assistant";
+import { CompanionChat } from "@/components/CompanionChat";
+import { parseDiagramDocument } from "@edgeever/shared";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import {
   clampFloatingPanelPosition,
@@ -67,6 +77,7 @@ const FREEFORM_VALUE = "custom";
 const PROMPT_VALUE_PREFIX = "prompt:";
 const AI_ASSISTANT_LAYER_SELECTOR = '[data-edgeever-ai-assistant-layer="true"]';
 const AI_ASSISTANT_VIEWPORT_GAP = 12;
+const AI_ASSISTANT_SELECT_TRIGGER_CLASSNAME = "h-10 w-full min-w-0 shadow-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/15 focus:ring-offset-0 data-[state=open]:border-emerald-400 data-[state=open]:ring-2 data-[state=open]:ring-emerald-500/15";
 
 const getViewportSize = () => ({
   height: typeof window === "undefined" ? 768 : window.innerHeight,
@@ -96,23 +107,39 @@ export const AiAssistantDialog = ({
   title,
   contentMarkdown,
   selectionMarkdown,
+  memoId,
+  notebookId,
+  notebookTitle,
+  companionAvailable = false,
   onOpenChange,
   onApply,
   onOpenPromptLibrary,
+  beforeCompanionApply,
+  onCompanionNotesChanged,
+  onOpenCompanionNote,
 }: {
   open: boolean;
   anchor: AiAssistantAnchor;
   title: string;
   contentMarkdown: string;
   selectionMarkdown?: string | null;
+  memoId?: string;
+  notebookId?: string;
+  notebookTitle?: string;
+  companionAvailable?: boolean;
   onOpenChange: (open: boolean) => void;
   onApply: (text: string, mode: "append" | "replace") => boolean;
   onOpenPromptLibrary?: () => void;
+  beforeCompanionApply?: () => Promise<void>;
+  onCompanionNotesChanged?: () => Promise<void>;
+  onOpenCompanionNote?: (id: string, notebookId: string) => void;
 }) => {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const hasSelection = Boolean(selectionMarkdown?.trim());
+  const lastActionScope = getAiAssistantLastActionScope(hasSelection);
   const sourceMarkdown = hasSelection ? selectionMarkdown!.trim() : contentMarkdown;
+  const noteHasContent = Boolean(contentMarkdown.trim());
   const defaultTargetLanguage = getDefaultTargetLanguage(i18n.resolvedLanguage);
   const defaultAction = getDefaultAiAction(hasSelection);
   const [action, setAction] = useState<AiAssistantAction>(defaultAction);
@@ -132,6 +159,7 @@ export const AiAssistantDialog = ({
   const [attachments, setAttachments] = useState<PreparedAiAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [isReadingAttachments, setIsReadingAttachments] = useState(false);
+  const [mode, setMode] = useState<AiAssistantMode>("instruction");
   const [initializedForOpen, setInitializedForOpen] = useState(false);
   const [panelElement, setPanelElement] = useState<HTMLElement | null>(null);
   const [draggedPosition, setDraggedPosition] = useState<FloatingPanelPosition | null>(null);
@@ -187,10 +215,6 @@ export const AiAssistantDialog = ({
       dragStateRef.current = null;
       return;
     }
-    setAction(defaultAction);
-    setSelectedPromptId(null);
-    setTargetLanguage(defaultTargetLanguage);
-    setTone("professional");
     setCustomInstruction("");
     setRefinement("");
     setOutput("");
@@ -210,6 +234,7 @@ export const AiAssistantDialog = ({
     dragStateRef.current = null;
     customInstructionEditedRef.current = false;
     lastRequestRef.current = null;
+    setMode(hasSelection ? "instruction" : readStoredAiAssistantMode());
   }, [defaultAction, defaultTargetLanguage, hasSelection, open]);
 
   useEffect(() => {
@@ -242,18 +267,17 @@ export const AiAssistantDialog = ({
       setInitializedForOpen(true);
       return;
     }
-    const preferred = prompts.find((prompt) => prompt.seedKey === defaultAction)
-      ?? prompts[0]
-      ?? null;
-    if (preferred) {
-      setSelectedPromptId(preferred.id);
-      setAction(preferred.action);
-    } else {
-      setSelectedPromptId(null);
-      setAction("custom");
-    }
+    const resolved = resolveAiAssistantOpenAction({
+      hasSelection,
+      preference: readStoredAiAssistantLastActionPreference(lastActionScope),
+      prompts,
+    });
+    setSelectedPromptId(resolved.selectedPromptId);
+    setAction(resolved.action);
+    setTargetLanguage(resolved.targetLanguage ?? defaultTargetLanguage);
+    setTone(resolved.tone ?? "professional");
     setInitializedForOpen(true);
-  }, [customInstruction, defaultAction, initializedForOpen, open, prompts, promptsQuery.isLoading]);
+  }, [customInstruction, defaultAction, defaultTargetLanguage, initializedForOpen, lastActionScope, open, prompts, promptsQuery.isLoading]);
 
   useEffect(() => {
     if (!open) return;
@@ -283,11 +307,34 @@ export const AiAssistantDialog = ({
     setPromptFeedback(null);
   };
 
+  const persistLastAction = ({
+    nextAction,
+    nextPrompt,
+    nextPromptId,
+    nextTargetLanguage,
+    nextTone,
+  }: {
+    nextAction: AiAssistantAction;
+    nextPrompt?: { seedKey: typeof prompts[number]["seedKey"] } | null;
+    nextPromptId: string | null;
+    nextTargetLanguage?: TargetLanguage;
+    nextTone?: AiTone;
+  }) => {
+    writeStoredAiAssistantLastActionPreference(lastActionScope, buildAiAssistantLastActionPreference({
+      action: nextAction,
+      promptId: nextPromptId,
+      seedKey: nextPrompt?.seedKey ?? null,
+      targetLanguage: nextTargetLanguage ?? targetLanguage,
+      tone: nextTone ?? tone,
+    }));
+  };
+
   const handleActionChange = (value: string) => {
     customInstructionEditedRef.current = false;
     if (value === FREEFORM_VALUE) {
       setAction("custom");
       setSelectedPromptId(null);
+      persistLastAction({ nextAction: "custom", nextPrompt: null, nextPromptId: null });
       clearResult();
       return;
     }
@@ -297,6 +344,11 @@ export const AiAssistantDialog = ({
     const prompt = prompts.find((item) => item.id === promptId);
     setSelectedPromptId(promptId);
     setAction(prompt?.action ?? "custom");
+    persistLastAction({
+      nextAction: prompt?.action ?? "custom",
+      nextPrompt: prompt ?? null,
+      nextPromptId: promptId,
+    });
     clearResult();
   };
 
@@ -370,8 +422,14 @@ export const AiAssistantDialog = ({
       return;
     }
 
+    persistLastAction({
+      nextAction: effectiveActionKey,
+      nextPrompt: selectedPrompt,
+      nextPromptId: selectedPromptId,
+    });
     const composerInput = resolveAiAssistantComposerInput({
       composerText: currentInstruction,
+      hasSelection,
       isFreeformCustom,
       noteContentMarkdown: sourceMarkdown,
       noteTitle: title,
@@ -479,6 +537,11 @@ export const AiAssistantDialog = ({
       );
       setSelectedPromptId(prompt.id);
       setAction(prompt.action);
+      persistLastAction({
+        nextAction: prompt.action,
+        nextPrompt: prompt,
+        nextPromptId: prompt.id,
+      });
       customInstructionEditedRef.current = false;
       setSaveDialogOpen(false);
       setSaveName("");
@@ -495,7 +558,9 @@ export const AiAssistantDialog = ({
     : null;
 
   const isFreeformCustom = !selectedPromptId && action === "custom";
-  const usesComposerAsSource = !isFreeformCustom && Boolean(customInstruction.trim());
+  const showInstructionComposer = isFreeformCustom;
+  const showSourceComposer = !isFreeformCustom && !hasSelection && !noteHasContent;
+  const usesComposerAsSource = showSourceComposer && Boolean(customInstruction.trim());
   const canSaveAsPrompt = isFreeformCustom && customInstruction.trim().length > 0;
   const generateDisabled = isGenerating
     || isReadingAttachments;
@@ -556,6 +621,12 @@ export const AiAssistantDialog = ({
     };
   }, [handleDragEnd, handleDragMove, open]);
 
+  const chatting = mode === "ask";
+  const openDiagram = useMemo(() => parseDiagramDocument(contentMarkdown), [contentMarkdown]);
+  const selectMode = (next: AiAssistantMode) => {
+    setMode(next);
+    writeStoredAiAssistantMode(next);
+  };
   const panelStyle = useMemo<CSSProperties>(() => {
     const { height: viewportHeight, width: viewportWidth } = viewportSize;
     if (draggedPosition) {
@@ -603,9 +674,11 @@ export const AiAssistantDialog = ({
               <Sparkles className="h-5 w-5 shrink-0 text-emerald-600" />
               <span className="truncate text-sm font-semibold text-slate-950">{t("aiAssistant.title")}</span>
               <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
-                {t(usesComposerAsSource
-                  ? "aiAssistant.inputScope"
-                  : hasSelection ? "aiAssistant.selectedScope" : "aiAssistant.noteScope")}
+                {t(chatting
+                  ? "aiAssistant.workspaceScope"
+                  : usesComposerAsSource
+                    ? "aiAssistant.inputScope"
+                    : hasSelection ? "aiAssistant.selectedScope" : "aiAssistant.noteScope")}
               </span>
               <GripHorizontal aria-hidden="true" className="ml-auto h-4 w-4 shrink-0 text-slate-300" />
             </div>
@@ -613,6 +686,48 @@ export const AiAssistantDialog = ({
               <X className="h-4 w-4" />
             </Button>
           </div>
+          <div className="mb-3 flex shrink-0 gap-1 rounded-lg bg-slate-100 p-1" role="tablist" aria-label={t("aiAssistant.title")}>
+            {(["instruction", "ask"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                role="tab"
+                aria-selected={mode === item}
+                className={cn(
+                  "h-8 flex-1 rounded-md px-2 text-xs font-medium",
+                  mode === item ? "bg-card text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800",
+                )}
+                onClick={() => selectMode(item)}
+              >
+                {t(`aiAssistant.modes.${item}`)}
+              </button>
+            ))}
+          </div>
+          {chatting ? (
+            <CompanionChat
+              available={companionAvailable}
+              focus={{
+                memoId,
+                notebookId,
+                notebookTitle,
+                title,
+                selectionMarkdown,
+                ...(openDiagram
+                  ? { diagramKind: openDiagram.kind }
+                  : contentMarkdown.trim()
+                    ? {
+                      contentMarkdown: contentMarkdown.trim().slice(0, 4000),
+                      ...(contentMarkdown.trim().length > 4000 ? { contentTruncated: true } : {}),
+                    }
+                    : {}),
+              }}
+              placeholder={t("aiAssistant.modes.askPlaceholder")}
+              beforeApply={beforeCompanionApply ?? (async () => undefined)}
+              onNotesChanged={onCompanionNotesChanged ?? (async () => undefined)}
+              onOpenNote={onOpenCompanionNote ?? (() => undefined)}
+            />
+          ) : (
+          <>
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             <div className="grid gap-4">
             {hasSelection ? (
@@ -620,7 +735,46 @@ export const AiAssistantDialog = ({
                 {selectionMarkdown}
               </p>
             ) : null}
-            <div className="order-3 grid gap-2">
+            {showInstructionComposer || showSourceComposer ? (
+            <div className="grid gap-2">
+              <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                {t(showInstructionComposer
+                  ? (hasSelection ? "aiAssistant.customInstructionSelected" : "aiAssistant.customInstruction")
+                  : "aiAssistant.inputContent")}
+                <textarea
+                  ref={instructionRef}
+                  className="min-h-24 resize-y rounded-md border border-slate-200 bg-card px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/15"
+                  value={customInstruction}
+                  onChange={(event) => {
+                    handleComposerChange(event.target.value);
+                  }}
+                  onCompositionEnd={(event) => {
+                    handleComposerChange(event.currentTarget.value);
+                  }}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key !== "Enter"
+                      || event.shiftKey
+                      || event.nativeEvent.isComposing
+                      || isGenerating
+                      || isReadingAttachments
+                    ) {
+                      return;
+                    }
+                    event.preventDefault();
+                    void generate();
+                  }}
+                  placeholder={t(showInstructionComposer
+                    ? (hasSelection
+                      ? "aiAssistant.customInstructionSelectedPlaceholder"
+                      : "aiAssistant.customInstructionPlaceholder")
+                    : "aiAssistant.inputContentEmptyPlaceholder")}
+                  maxLength={2_000}
+                />
+              </label>
+            </div>
+            ) : null}
+            <div className="grid gap-2">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-slate-700">{t("aiAssistant.actionLabel")}</span>
                 {onOpenPromptLibrary ? (
@@ -639,7 +793,7 @@ export const AiAssistantDialog = ({
               </div>
               <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <Select value={selectValue} onValueChange={handleActionChange}>
-                  <SelectTrigger aria-label={t("aiAssistant.actionLabel")} className="h-10 w-full min-w-0">
+                  <SelectTrigger aria-label={t("aiAssistant.actionLabel")} className={AI_ASSISTANT_SELECT_TRIGGER_CLASSNAME}>
                     <SelectValue placeholder={t("aiAssistant.actionLabel")} />
                   </SelectTrigger>
                   <SelectContent
@@ -667,8 +821,11 @@ export const AiAssistantDialog = ({
                 <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-[8rem_7rem]">
                   <Button
                     type="button"
-                    variant={!selectedPromptId && action === "custom" ? "solid" : "outline"}
-                    className="h-10 min-w-0 w-full gap-1 whitespace-nowrap px-3 text-xs font-normal text-slate-600"
+                    variant="outline"
+                    className={cn(
+                      "h-10 min-w-0 w-full gap-1.5 whitespace-nowrap px-3 text-sm font-medium",
+                      isFreeformCustom && "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900",
+                    )}
                     onClick={() => handleActionChange(FREEFORM_VALUE)}
                   >
                     <PenLine className="h-3.5 w-3.5 shrink-0" />
@@ -691,13 +848,20 @@ export const AiAssistantDialog = ({
               </div>
             </div>
             {promptNeedsTargetLanguage(effectiveParameterKind) ? (
-              <div className="order-2 grid gap-1.5">
+              <div className="grid gap-1.5">
                 <span className="text-sm font-medium text-slate-700">{t("aiAssistant.targetLanguage")}</span>
                 <Select value={targetLanguage} onValueChange={(value) => {
-                  setTargetLanguage(value as TargetLanguage);
+                  const nextTargetLanguage = value as TargetLanguage;
+                  setTargetLanguage(nextTargetLanguage);
+                  persistLastAction({
+                    nextAction: action,
+                    nextPrompt: selectedPrompt,
+                    nextPromptId: selectedPromptId,
+                    nextTargetLanguage,
+                  });
                   clearResult();
                 }}>
-                  <SelectTrigger aria-label={t("aiAssistant.targetLanguage")} className="h-10">
+                  <SelectTrigger aria-label={t("aiAssistant.targetLanguage")} className={AI_ASSISTANT_SELECT_TRIGGER_CLASSNAME}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent
@@ -715,13 +879,20 @@ export const AiAssistantDialog = ({
               </div>
             ) : null}
             {promptNeedsTone(effectiveParameterKind) ? (
-              <div className="order-2 grid gap-1.5">
+              <div className="grid gap-1.5">
                 <span className="text-sm font-medium text-slate-700">{t("aiAssistant.tone")}</span>
                 <Select value={tone} onValueChange={(value) => {
-                  setTone(value as AiTone);
+                  const nextTone = value as AiTone;
+                  setTone(nextTone);
+                  persistLastAction({
+                    nextAction: action,
+                    nextPrompt: selectedPrompt,
+                    nextPromptId: selectedPromptId,
+                    nextTone,
+                  });
                   clearResult();
                 }}>
-                  <SelectTrigger aria-label={t("aiAssistant.tone")} className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("aiAssistant.tone")} className={AI_ASSISTANT_SELECT_TRIGGER_CLASSNAME}><SelectValue /></SelectTrigger>
                   <SelectContent
                     className="z-[80] max-h-[min(20rem,var(--radix-select-content-available-height))]"
                     collisionBoundary={panelElement}
@@ -734,38 +905,7 @@ export const AiAssistantDialog = ({
                 </Select>
               </div>
             ) : null}
-            <div className="order-1 grid gap-2">
-              <label className="grid gap-1.5 text-sm font-medium text-slate-700">
-                {t(isFreeformCustom ? "aiAssistant.customInstruction" : "aiAssistant.inputContent")}
-                <textarea
-                  ref={instructionRef}
-                  className="min-h-24 resize-y rounded-md border border-slate-200 bg-card px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/15"
-                  value={customInstruction}
-                  onChange={(event) => {
-                    handleComposerChange(event.target.value);
-                  }}
-                  onCompositionEnd={(event) => {
-                    handleComposerChange(event.currentTarget.value);
-                  }}
-                  onKeyDown={(event) => {
-                    if (
-                      event.key !== "Enter"
-                      || event.shiftKey
-                      || event.nativeEvent.isComposing
-                      || isGenerating
-                      || isReadingAttachments
-                    ) {
-                      return;
-                    }
-                    event.preventDefault();
-                    void generate();
-                  }}
-                  placeholder={t(isFreeformCustom
-                    ? "aiAssistant.customInstructionPlaceholder"
-                    : "aiAssistant.inputContentPlaceholder")}
-                  maxLength={2_000}
-                />
-              </label>
+            <div className="grid gap-2">
               <div className="flex flex-wrap gap-2">
                 <input
                   ref={attachmentInputRef}
@@ -832,7 +972,7 @@ export const AiAssistantDialog = ({
               {promptFeedback ? <p className="text-xs font-medium text-emerald-700">{promptFeedback}</p> : null}
               {promptErrorMessage ? <p className="text-xs font-medium text-rose-600" role="alert">{promptErrorMessage}</p> : null}
             </div>
-            <div className="order-4 grid gap-1.5">
+            <div className="grid gap-1.5">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-slate-700">{t("aiAssistant.result")}</span>
                 {isGenerating ? (
@@ -861,7 +1001,7 @@ export const AiAssistantDialog = ({
               </div>
             </div>
             {output && !isGenerating ? (
-              <div className="order-4 grid gap-1.5 rounded-lg border border-slate-200 bg-card p-3">
+              <div className="grid gap-1.5 rounded-lg border border-slate-200 bg-card p-3">
                 <span className="text-sm font-medium text-slate-700">{t("aiAssistant.refine")}</span>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <input
@@ -903,6 +1043,8 @@ export const AiAssistantDialog = ({
               </div>
             </div>
           ) : null}
+          </>
+          )}
         </section>,
         document.body,
       ) : null}
