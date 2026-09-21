@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getClientDisplaySizeParts } from "@edgeever/shared";
 import type { DeploymentMetadata } from "@edgeever/shared/deployment-metadata";
 import { Activity, CircleCheck, Cloud, Copy, ExternalLink, Info, LoaderCircle, MonitorSmartphone, RefreshCw, RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -12,6 +13,7 @@ import { resolveDeploymentPlatform } from "@/lib/instance-runtime";
 import {
   getClientRuntimeDiagnostics,
   getClientSyncDiagnostics,
+  readBrowserClientDisplaySize,
   type ClientRuntimeDiagnostics,
   type ClientSyncDiagnostics,
 } from "@/lib/system-diagnostics";
@@ -25,6 +27,7 @@ export type SystemInfoItem = {
   mono?: boolean;
   colSpan?: "full" | "two" | "double-sm";
   status?: "connected" | "connecting" | "failed" | "warning" | "error" | "default";
+  localOnly?: boolean;
 };
 
 type InstanceSystemDiagnostics = Pick<InstanceHealth, "build" | "containerImageSource" | "deployment" | "migration" | "objectStorageProvider" | "storage"> & {
@@ -34,6 +37,7 @@ type InstanceSystemDiagnostics = Pick<InstanceHealth, "build" | "containerImageS
 export type SystemInfoDiagnostics = {
   clientRuntime?: ClientRuntimeDiagnostics | null;
   instance?: Partial<InstanceSystemDiagnostics> | null;
+  instanceUrl?: string | null;
   instanceVersion?: string | null;
 };
 
@@ -85,12 +89,33 @@ const getColSpanClass = (colSpan?: SystemInfoItem["colSpan"]) => {
   return "col-span-1";
 };
 
-const getWebSystemInfoGroups = (
+const formatLastSuccessfulSync = (
   t: (key: string) => string,
+  language: string,
+  sync: ClientSyncDiagnostics | undefined,
+) => {
+  if (!sync) return t("systemInfo.unknown");
+  if (sync.lastSyncedAt) {
+    const lastSyncedDate = new Date(sync.lastSyncedAt);
+    if (Number.isFinite(lastSyncedDate.getTime())) {
+      return new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(lastSyncedDate);
+    }
+  }
+  const outstanding = sync.pending + sync.syncing + sync.error + sync.conflict;
+  return outstanding > 0 ? t("systemInfo.neverSynced") : t("systemInfo.nothingToSync");
+};
+
+const getWebSystemInfoGroups = (
+  t: (key: string, options?: Record<string, string>) => string,
   language: string,
   diagnostics: SystemInfoDiagnostics = {},
 ): SystemInfoGroup[] => {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || t("systemInfo.unknown");
+  const displaySize = (() => {
+    const metrics = readBrowserClientDisplaySize();
+    const parts = metrics ? getClientDisplaySizeParts(metrics) : null;
+    return parts ? t("systemInfo.screenResolutionValue", parts) : null;
+  })();
   const userAgent = navigator.userAgent;
   const clientKind = detectWebClientKind({
     desktopBridgeAvailable: window.edgeeverDesktop?.isAvailable === true,
@@ -107,6 +132,9 @@ const getWebSystemInfoGroups = (
     },
     clientKind !== "desktopApp",
   );
+  const instanceUrl = clientKind === "desktopApp"
+    ? (diagnostics.instanceUrl ?? getConfiguredDesktopApiBaseUrl()).trim()
+    : "";
 
   return [
     {
@@ -114,6 +142,14 @@ const getWebSystemInfoGroups = (
       title: t("systemInfo.cloudSection"),
       description: t("systemInfo.cloudSectionDescription"),
       items: [
+        ...(instanceUrl
+          ? [{
+              label: t("systemInfo.instanceUrl"),
+              value: instanceUrl,
+              colSpan: "full" as const,
+              localOnly: true,
+            }]
+          : []),
         {
           label: t("systemInfo.instanceVersion"),
           value: diagnostics.instanceVersion
@@ -183,6 +219,10 @@ const getWebSystemInfoGroups = (
             ?? t("systemInfo.unknown"),
         },
         {
+          label: t("systemInfo.deviceModel"),
+          value: diagnostics.clientRuntime?.deviceModel ?? t("systemInfo.unknown"),
+        },
+        {
           label: t("systemInfo.architecture"),
           value: diagnostics.clientRuntime?.architecture ?? t("systemInfo.unknown"),
           mono: true,
@@ -193,6 +233,12 @@ const getWebSystemInfoGroups = (
             ?? (clientKind === "desktopApp" ? t("systemInfo.unknown") : detectBrowser(userAgent) ?? t("systemInfo.unknown")),
         },
         { label: t("systemInfo.language"), value: navigator.language || language, mono: true },
+        {
+          label: t("systemInfo.screenResolution"),
+          value: displaySize ?? t("systemInfo.unknown"),
+          mono: true,
+          colSpan: "full",
+        },
         { label: t("systemInfo.timeZone"), value: timeZone, mono: true, colSpan: "double-sm" },
       ],
     },
@@ -200,16 +246,25 @@ const getWebSystemInfoGroups = (
 };
 
 export const getWebSystemInfoItems = (
-  t: (key: string) => string,
+  t: (key: string, options?: Record<string, string>) => string,
   language: string,
   diagnostics: SystemInfoDiagnostics = {},
 ): SystemInfoItem[] => getWebSystemInfoGroups(t, language, diagnostics)
   .flatMap((group) => group.items);
 
+export const getShareableWebSystemInfoItems = (
+  t: (key: string, options?: Record<string, string>) => string,
+  language: string,
+  diagnostics: SystemInfoDiagnostics = {},
+) => getWebSystemInfoItems(t, language, diagnostics)
+  .filter((item) => !item.localOnly)
+  .map(({ label, value }) => ({ label, value }));
+
 export const SystemInfoPanel = ({ active = true }: { active?: boolean }) => {
   const { t, i18n } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [desktopUpdateChecked, setDesktopUpdateChecked] = useState(false);
+  const [viewportRevision, setViewportRevision] = useState(0);
   const queryClient = useQueryClient();
   const { release } = useDeployedUpdateNotice();
   const desktopBridge = window.edgeeverDesktop;
@@ -247,6 +302,12 @@ export const SystemInfoPanel = ({ active = true }: { active?: boolean }) => {
     refetchInterval: (query) => query.state.data?.state === "available" ? 1_000 : false,
     retry: 1,
   });
+  useEffect(() => {
+    if (!active) return;
+    const onResize = () => setViewportRevision((value) => value + 1);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [active]);
   const desktopUpdateCheckMutation = useMutation({
     mutationFn: () => desktopBridge!.checkUpdate(),
     onSuccess: (status) => {
@@ -261,15 +322,10 @@ export const SystemInfoPanel = ({ active = true }: { active?: boolean }) => {
     const groups = getWebSystemInfoGroups(t, i18n.language, {
       clientRuntime: clientRuntimeQuery.data,
       instance: healthQuery.data?.health,
+      instanceUrl: desktopAvailable ? instanceUrl : null,
       instanceVersion: release?.version,
     });
-    const lastSyncedAt = syncDiagnosticsQuery.data?.lastSyncedAt;
-    const lastSyncedDate = lastSyncedAt ? new Date(lastSyncedAt) : null;
-    const formattedLastSync = !syncDiagnosticsQuery.data
-      ? t("systemInfo.unknown")
-      : lastSyncedDate && Number.isFinite(lastSyncedDate.getTime())
-        ? new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium", timeStyle: "short" }).format(lastSyncedDate)
-        : t("systemInfo.neverSynced");
+    const formattedLastSync = formatLastSuccessfulSync(t, i18n.language, syncDiagnosticsQuery.data);
     const pendingCount = syncDiagnosticsQuery.data
       ? syncDiagnosticsQuery.data.pending + syncDiagnosticsQuery.data.syncing
       : null;
@@ -315,13 +371,16 @@ export const SystemInfoPanel = ({ active = true }: { active?: boolean }) => {
     return groups;
   }, [
     clientRuntimeQuery.data,
+    desktopAvailable,
     healthQuery.data,
     healthQuery.isError,
     healthQuery.isSuccess,
     i18n.language,
+    instanceUrl,
     release?.version,
     syncDiagnosticsQuery.data,
     t,
+    viewportRevision,
   ]);
   const releaseTag = release ? getReleaseTagForVersion(release.version) : null;
   const releaseUrl = releaseTag

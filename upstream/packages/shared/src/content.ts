@@ -109,12 +109,29 @@ const markdownManager = createEdgeEverMarkdownManager({
   mathematics: createEdgeEverMarkdownMathematics(),
 });
 
+const PROTECTED_MARKDOWN_SEGMENT = /(```[\s\S]*?```|~~~[\s\S]*?~~~|\$\$[\s\S]*?\$\$)/g;
+
+/**
+ * CommonMark treats one or more blank lines as a single paragraph break, so two
+ * visual blank lines disappear on parse. Expand those extra newlines into the
+ * empty-paragraph spacing TipTap already understands, without touching fenced
+ * code or display-math blocks.
+ */
+const expandExtraBlankLinesForParse = (markdown: string) =>
+  markdown.split(PROTECTED_MARKDOWN_SEGMENT).map((segment) => {
+    if (segment.startsWith("```") || segment.startsWith("~~~") || segment.startsWith("$$")) {
+      return segment;
+    }
+    return segment.replace(/\n{3,}/g, (run) => "\n\n".repeat(run.length - 1));
+  }).join("");
+
 export const markdownToDoc = (markdown: string): TiptapDoc => {
-  if (!markdown.trim()) {
+  const normalized = markdown.replace(/\r\n?/g, "\n");
+  if (!normalized) {
     return emptyDoc();
   }
 
-  return markdownManager.parse(markdown.replace(/\r\n?/g, "\n")) as TiptapDoc;
+  return markdownManager.parse(expandExtraBlankLinesForParse(normalized)) as TiptapDoc;
 };
 
 const docContainsNodeType = (doc: TiptapDoc, nodeType: string): boolean => {
@@ -152,6 +169,7 @@ export const resolveMemoContentDoc = (
     docContainsNodeType(currentDoc, INLINE_MATH_NODE_TYPE)
     || docContainsNodeType(currentDoc, PDF_ATTACHMENT_NODE_TYPE)
     || docContainsNodeType(currentDoc, FILE_ATTACHMENT_NODE_TYPE)
+    || docContainsNodeType(currentDoc, "details")
   ) {
     return currentDoc;
   }
@@ -167,6 +185,7 @@ export const resolveMemoContentDoc = (
     || docContainsNodeType(markdownDoc, MERGE_DIVIDER_NODE_TYPE)
     || docContainsNodeType(markdownDoc, BLOCK_MATH_NODE_TYPE)
     || docContainsNodeType(markdownDoc, INLINE_MATH_NODE_TYPE)
+    || docContainsNodeType(markdownDoc, "details")
     || !docToText(currentDoc)
     ? markdownDoc
     : currentDoc;

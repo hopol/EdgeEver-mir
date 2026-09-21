@@ -1,5 +1,7 @@
+import { EditorState } from "@tiptap/pm/state";
 import type { Editor } from "@tiptap/react";
-import type { MemoDetail, MemoEditSession } from "@edgeever/shared";
+import type { MemoDetail, MemoEditSession, TiptapDoc } from "@edgeever/shared";
+import { releaseHtmlMediaSources } from "@/lib/editor-media-release";
 import { isDesktopResourceRuntime } from "@/lib/desktop-resources";
 import { isBrowserOffline } from "@/lib/network-status";
 import { isLocalMemoId } from "@/lib/local-mirror";
@@ -77,6 +79,54 @@ export type MobilePlainTextElement = HTMLTextAreaElement | HTMLDivElement;
 export const isEditorReady = (editor: Editor | null | undefined): editor is Editor =>
   Boolean(editor && !editor.isDestroyed && (editor as { extensionManager?: unknown }).extensionManager);
 
+export const releaseEditorMedia = (editor: Editor) => {
+  releaseHtmlMediaSources(editor.view.dom);
+};
+
+/**
+ * Replace the document with a fresh EditorState so undo/redo cannot leak
+ * across memos. Cheaper than destroying the TipTap view on every switch.
+ * Releases decoded images from the previous document first.
+ */
+export const resetEditorDocument = (editor: Editor, content: TiptapDoc) => {
+  releaseEditorMedia(editor);
+  editor.view.updateState(EditorState.create({
+    schema: editor.schema,
+    doc: editor.schema.nodeFromJSON(content),
+    plugins: editor.state.plugins,
+  }));
+};
+
+export const CREATED_MEMO_FOCUS_MAX_ATTEMPTS = 120;
+
+export const isCreatedMemoEditorFocused = (editor: Editor | null | undefined) =>
+  isEditorReady(editor) && editor.isEditable && (editor.isFocused || editor.view.hasFocus());
+
+/**
+ * Keep retrying create-note autofocus until the editor is actually editable
+ * and focused. Hydration sets a ref before React has flipped `editable`, and
+ * desktop id remapping can blur a successful first focus.
+ */
+export const shouldRetryCreatedMemoFocus = ({
+  attempt,
+  editorEditable,
+  editorFocused,
+  editorReady,
+  hydratedForMemo,
+  maxAttempts = CREATED_MEMO_FOCUS_MAX_ATTEMPTS,
+}: {
+  attempt: number;
+  editorEditable: boolean;
+  editorFocused: boolean;
+  editorReady: boolean;
+  hydratedForMemo: boolean;
+  maxAttempts?: number;
+}) => {
+  if (attempt >= maxAttempts) return false;
+  if (!editorReady || !hydratedForMemo || !editorEditable) return true;
+  return !editorFocused;
+};
+
 export const getMobilePlainTextElementValue = (element: MobilePlainTextElement | null) => {
   if (!element) {
     return "";
@@ -137,6 +187,15 @@ export const getResourceFilesFromDataTransfer = (dataTransfer: DataTransfer | nu
 
   return files.filter((file) => file.size > 0);
 };
+
+/** Block-handle drags set view.dragging; Chrome may also attach a preview image as a file. */
+export const shouldInsertDroppedResourceFiles = ({
+  dataTransfer,
+  isInternalNodeDrag,
+}: {
+  dataTransfer: DataTransfer | null;
+  isInternalNodeDrag: boolean;
+}) => !isInternalNodeDrag && getResourceFilesFromDataTransfer(dataTransfer).length > 0;
 
 export const syncStatusToSaveState = (status: "pending" | "syncing" | "conflict" | "error") => {
   if (status === "conflict") {

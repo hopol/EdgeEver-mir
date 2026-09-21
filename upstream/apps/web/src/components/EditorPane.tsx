@@ -24,7 +24,7 @@ import {
   FileDown,
   FileCode2,
   Printer,
-  Link2,
+  Image as ImageIcon,
   Share2,
   Copy,
   Lock,
@@ -95,11 +95,21 @@ const MarkdownSourceEditor = lazy(() =>
 import { sanitizeAndScopeCss } from "@/lib/css-sandbox";
 import { RevisionHistoryDialog } from "./dialogs/RevisionHistoryDialog";
 import { ExternalLinkDialog } from "./dialogs/ExternalLinkDialog";
+import { MathFormulaDialog } from "./dialogs/MathFormulaDialog";
+import { EditorBlockDragHandle } from "./editor/EditorBlockDragHandle";
+import {
+  applyMathFormula,
+  deleteMathFormula,
+  resolveMathFormulaTarget,
+  selectedTextAsLatex,
+  type MathFormulaDraft,
+} from "./editor/math-formula";
 import { memoShareQueryKey, ShareMemoDialog } from "./dialogs/ShareMemoDialog";
 import { ShareNoteImageDialog } from "./dialogs/ShareNoteImageDialog";
 import { AiAssistantDialog, type AiAssistantAnchor } from "./dialogs/AiAssistantDialog";
 import { api } from "@/lib/api";
 import { isDesktopResourceRuntime, stageDesktopResource, toDesktopResourceDownloadUrl, toDesktopResourceUrl } from "@/lib/desktop-resources";
+import { contentReferencesStagedResourceUrl, findMatchingMemoResource, repairMemoStagedResourceUrls, repairTiptapStagedResourceUrls } from "@/lib/staged-resource-repair";
 import { cn, formatDateTime, parseTagsText } from "@/lib/utils";
 import { EDITOR_CONTENT_MAX_WIDTH, EDITOR_CONTENT_MAX_WIDTH_COLLAPSED } from "@/lib/workspace-ui";
 import {
@@ -111,6 +121,7 @@ import {
   normalizeImageGalleries,
   PLUGIN_EMBED_NODE_TYPE,
   pluginEmbedToMarkdown,
+  wrapDetailsContentHtml,
   isPdfAttachment,
   resolveMemoContentDoc,
   type Notebook,
@@ -253,8 +264,13 @@ import {
   getNoteLinkFromEventTarget,
   getNoteLinkHintPosition,
   getResourceFilesFromDataTransfer,
+  shouldInsertDroppedResourceFiles,
+  isCreatedMemoEditorFocused,
   isEditorReady,
   MemoSaveRequestError,
+  releaseEditorMedia,
+  resetEditorDocument,
+  shouldRetryCreatedMemoFocus,
   MOBILE_DRAFT_PERSIST_DELAY_MS,
   MOBILE_EDITOR_QUERY,
   requiresLocalEditSession,
@@ -440,6 +456,8 @@ const RichEditorPane = ({
     showTextField: true,
     canRemove: false,
   });
+  const [mathFormulaOpen, setMathFormulaOpen] = useState(false);
+  const [mathFormulaDraft, setMathFormulaDraft] = useState<MathFormulaDraft | null>(null);
   const {
     menuTarget: resourceMenuTarget,
     dialog: resourceDialog,
@@ -569,6 +587,7 @@ const RichEditorPane = ({
     setAiInsertionTarget(null);
     closeNoteReplaceRef.current();
     setExternalLinkDialogOpen(false);
+    setMathFormulaOpen(false);
     setNoteLinkPickerOpen(false);
   }, [desktopReadingProtection]);
 
@@ -584,6 +603,13 @@ const RichEditorPane = ({
   const mobileSaveTimerRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const openExternalLinkDialogRef = useRef<() => void>(() => undefined);
+  const openMathFormulaRef = useRef<(kind?: "inline" | "block", range?: { from: number; to: number }) => void>(() => undefined);
+  const mathFormulaDraftRef = useRef<MathFormulaDraft | null>(null);
+  const mathClickRef = useRef<(node: { attrs: Record<string, unknown> }, pos: number, kind: "inline" | "block") => void>(() => undefined);
+  const mathematicsExtensionsRef = useRef(createEdgeEverMathematics({
+    onInlineClick: (node, pos) => mathClickRef.current(node, pos, "inline"),
+    onBlockClick: (node, pos) => mathClickRef.current(node, pos, "block"),
+  }));
   const slashCommandLabelsRef = useRef<SlashCommandLabels>({
     menu: "",
     empty: "",
@@ -595,13 +621,19 @@ const RichEditorPane = ({
       "heading-1": "",
       "heading-2": "",
       "heading-3": "",
+      "heading-4": "",
+      "heading-5": "",
+      "heading-6": "",
       "bullet-list": "",
       "ordered-list": "",
       "task-list": "",
       blockquote: "",
       "code-block": "",
       divider: "",
+      fold: "",
       table: "",
+      "inline-math": "",
+      "block-math": "",
       "current-date": "",
       "current-time": "",
       "current-date-time": "",
@@ -625,13 +657,19 @@ const RichEditorPane = ({
       "heading-1": t("editorToolbar.heading1"),
       "heading-2": t("editorToolbar.heading2"),
       "heading-3": t("editorToolbar.heading3"),
+      "heading-4": t("editorToolbar.heading4"),
+      "heading-5": t("editorToolbar.heading5"),
+      "heading-6": t("editorToolbar.heading6"),
       "bullet-list": t("editorToolbar.bulletList"),
       "ordered-list": t("editorToolbar.orderedList"),
       "task-list": t("editorToolbar.taskList"),
       blockquote: t("editorToolbar.quote"),
       "code-block": t("editorToolbar.codeBlock"),
       divider: t("editorToolbar.horizontalRule"),
+      fold: t("editorToolbar.fold"),
       table: t("editorToolbar.table"),
+      "inline-math": t("editorToolbar.math"),
+      "block-math": t("editorToolbar.blockMath"),
       "current-date": t("slashMenu.items.currentDate"),
       "current-time": t("slashMenu.items.currentTime"),
       "current-date-time": t("slashMenu.items.currentDateTime"),
@@ -647,6 +685,7 @@ const RichEditorPane = ({
       openAttachmentPicker: () => fileInputRef.current?.click(),
       openExternalLinkPicker: () => openExternalLinkDialogRef.current(),
       openNoteLinkPicker: () => setNoteLinkPickerOpen(true),
+      openMathFormula: (kind, range) => openMathFormulaRef.current(kind, range),
     };
   }
   const slashCommandExtensionRef = useRef<ReturnType<typeof createSlashCommandExtension> | null>(null);
@@ -782,27 +821,51 @@ const RichEditorPane = ({
           }
 
           const currentEditor = editorRef.current;
-            if (!isMobileViewport) {
-              if (isEditorReady(currentEditor) && hydratedMemoIdRef.current === memo.id) {
-                currentEditor.commands.focus("end");
-                // Consuming the create request updates the parent and can
-                // briefly blur the editor during that rerender. Mobile
-                // standalone editing consumes the request above; desktop
-                // keeps it alive until the list has observed the new memo so
-                // a background refresh cannot select the previous memo.
-                window.setTimeout(() => {
-                  if (cancelled || memoRef.current?.id !== memo.id) {
-                    return;
-                  }
+          if (!isMobileViewport) {
+            const hydratedForMemo = isEditorInstanceHydratedForMemo(
+              editorInstanceMemoIdentityRef.current,
+              hydratedMemoIdRef.current,
+              memo.id,
+            );
+            if (isEditorReady(currentEditor) && hydratedForMemo && currentEditor.isEditable) {
+              currentEditor.commands.focus("end");
+            }
 
-                  const activeEditor = editorRef.current;
-                  if (isEditorReady(activeEditor)) {
-                    activeEditor.commands.focus("end");
-                  }
-                }, 0);
+            if (shouldRetryCreatedMemoFocus({
+              attempt,
+              editorEditable: Boolean(currentEditor?.isEditable),
+              editorFocused: isCreatedMemoEditorFocused(currentEditor),
+              editorReady: isEditorReady(currentEditor),
+              hydratedForMemo,
+            })) {
+              focusWhenReady(attempt + 1);
+              return;
+            }
+
+            // Consuming the create request updates the parent and can
+            // briefly blur the editor during that rerender. Desktop sync
+            // remapping can also change the memo id before this timeout.
+            window.setTimeout(() => {
+              if (cancelled) {
                 return;
               }
-            }
+
+              const activeMemoId = memoRef.current?.id;
+              if (
+                !activeMemoId
+                || !editorInstanceMemoIdentityRef.current.aliases.has(activeMemoId)
+                || !editorInstanceMemoIdentityRef.current.aliases.has(memo.id)
+              ) {
+                return;
+              }
+
+              const activeEditor = editorRef.current;
+              if (isEditorReady(activeEditor) && activeEditor.isEditable) {
+                activeEditor.commands.focus("end");
+              }
+            }, 0);
+            return;
+          }
 
           // The editor is mounted before its memo hydration/edit session
           // finishes. Keep retrying across that async boundary so a newly
@@ -890,15 +953,31 @@ const RichEditorPane = ({
           resource = { ...uploadedResource, url: toDesktopResourceUrl(uploadedResource.url) };
         } catch (error) {
           if (!isDesktopResourceRuntime()) throw error;
-          const staged = await stageDesktopResource(targetMemoId, uploadFile);
-          if (!staged) throw error;
-          resource = {
-            kind: isImage ? "image" : "attachment",
-            filename: uploadFile.name,
-            mimeType: uploadFile.type || null,
-            byteSize: uploadFile.size,
-            url: `edgeever-staged://${staged.id}`,
-          };
+          const listed = await repository.listResources().catch(() => ({ resources: [] as Array<{ memoId?: string; url: string; filename?: string | null; kind?: string | null; mimeType?: string | null; byteSize?: number }> }));
+          const existing = findMatchingMemoResource(
+            listed.resources.filter((item) => item.memoId === targetMemoId),
+            uploadFile.name,
+            isImage ? "image" : "attachment",
+          );
+          if (existing) {
+            resource = {
+              kind: isImage ? "image" : "attachment",
+              filename: existing.filename || uploadFile.name,
+              mimeType: existing.mimeType || uploadFile.type || null,
+              byteSize: existing.byteSize ?? uploadFile.size,
+              url: toDesktopResourceUrl(existing.url),
+            };
+          } else {
+            const staged = await stageDesktopResource(targetMemoId, uploadFile);
+            if (!staged) throw error;
+            resource = {
+              kind: isImage ? "image" : "attachment",
+              filename: uploadFile.name,
+              mimeType: uploadFile.type || null,
+              byteSize: uploadFile.size,
+              url: `edgeever-staged://${staged.id}`,
+            };
+          }
         }
         if (resource.kind === "image") {
           imageReadiness.push(waitForImageSourceReady(resource.url));
@@ -1010,8 +1089,12 @@ const RichEditorPane = ({
   const editor = useEditor({
     extensions: [
       ...createEdgeEverDocumentExtensions({
-        mathematics: createEdgeEverMathematics(),
-        starterKit: { codeBlock: false, link: false },
+        mathematics: mathematicsExtensionsRef.current,
+        starterKit: {
+          codeBlock: false,
+          link: false,
+          dropcursor: { color: "#16A06E", width: 2 },
+        },
         image: false,
         gallery: EditableImageGallery,
         pdf: PdfAttachment,
@@ -1149,6 +1232,7 @@ const RichEditorPane = ({
         }
         return true;
       },
+      transformPastedHTML: (html) => wrapDetailsContentHtml(html),
       handlePaste: (_view, event) => {
         const files = getResourceFilesFromDataTransfer(event.clipboardData);
 
@@ -1160,23 +1244,23 @@ const RichEditorPane = ({
         insertResourceFiles(files);
         return true;
       },
-      handleDrop: (_view, event) => {
-        const files = getResourceFilesFromDataTransfer(event.dataTransfer);
-
-        if (files.length === 0) {
+      handleDrop: (view, event) => {
+        if (!shouldInsertDroppedResourceFiles({
+          dataTransfer: event.dataTransfer,
+          isInternalNodeDrag: Boolean(view.dragging),
+        })) {
           return false;
         }
 
         event.preventDefault();
-        insertResourceFiles(files);
+        insertResourceFiles(getResourceFilesFromDataTransfer(event.dataTransfer));
         return true;
       },
     },
   }, [
-    // A ProseMirror undo history belongs to exactly one logical memo. A newly
-    // created memo keeps the same instance while its local id is remapped to a
-    // durable id; an actual memo switch still receives a fresh undo history.
-    editorInstanceMemoKey,
+    // Keep one TipTap view for the pane lifetime. A newly created memo already
+    // reuses this instance across local→durable id remaps; switching notes now
+    // also reuses it and resets undo history via resetEditorDocument.
   ]);
 
   const {
@@ -1295,6 +1379,49 @@ const RichEditorPane = ({
   ]);
 
   openExternalLinkDialogRef.current = openExternalLinkDialog;
+
+  const openMathFormula = useCallback((kind: "inline" | "block" = "inline", range?: { from: number; to: number }) => {
+    if (effectiveReadOnly || !isEditorReady(editor) || useMarkdownSourceEditor || useMobilePlainTextEditor) {
+      return;
+    }
+
+    if (!range) {
+      const existing = resolveMathFormulaTarget(editor);
+      if (existing) {
+        mathFormulaDraftRef.current = existing;
+        setMathFormulaDraft(existing);
+        setMathFormulaOpen(true);
+        return;
+      }
+    }
+
+    const from = range?.from ?? editor.state.selection.from;
+    const to = range?.to ?? editor.state.selection.to;
+    const draft: MathFormulaDraft = {
+      kind,
+      latex: range ? "" : selectedTextAsLatex(editor),
+      from,
+      to,
+    };
+    mathFormulaDraftRef.current = draft;
+    setMathFormulaDraft(draft);
+    setMathFormulaOpen(true);
+  }, [editor, effectiveReadOnly, useMarkdownSourceEditor, useMobilePlainTextEditor]);
+
+  openMathFormulaRef.current = openMathFormula;
+  mathClickRef.current = (_node, pos, kind) => {
+    if (effectiveReadOnly || !isEditorReady(editor) || useMarkdownSourceEditor || useMobilePlainTextEditor) {
+      return;
+    }
+    const existing = resolveMathFormulaTarget(editor, pos) ?? {
+      kind,
+      latex: String(_node.attrs.latex ?? ""),
+      pos,
+    };
+    mathFormulaDraftRef.current = existing;
+    setMathFormulaDraft(existing);
+    setMathFormulaOpen(true);
+  };
 
   const applyExternalLink = useCallback(
     ({ href, text }: { href: string; text: string }) => {
@@ -1667,6 +1794,7 @@ const RichEditorPane = ({
     contentSearchQuery,
     dirtyVersion,
     editor,
+    editorInstanceKey: editorInstanceMemoKey,
     editorScrollContainerRef,
     memoId: memo?.id ?? null,
     readOnly: effectiveReadOnly,
@@ -1720,10 +1848,10 @@ const RichEditorPane = ({
         hydratedMemoIdRef.current !== currentMemo.id ||
         (!useMobilePlainTextEditor && !isEditorReady(currentEditor))
       ) {
-        return;
+        return Promise.resolve();
       }
 
-      void localDb.drafts.put({
+      return localDb.drafts.put({
         memoId: currentMemo.id,
         title: nextTitle,
         tagsText: nextTagsText,
@@ -2038,6 +2166,7 @@ const RichEditorPane = ({
       setSaveState("idle");
       setStorageSaveError(false);
       if (isEditorReady(currentEditor)) {
+        releaseEditorMedia(currentEditor);
         currentEditor.commands.clearContent();
       }
       return;
@@ -2050,7 +2179,28 @@ const RichEditorPane = ({
       hydratedMemoIdRef.current = null;
       appliedEditorSourceKeyRef.current = null;
       clearMarkdownSnapshot();
-      setHydratedEditorMemoId(null);
+      const immediateDraft = resolveEditorDraftState({ memo, draft: null, queuedUpdate: null });
+      editingMemoIdRef.current = memo.id;
+      setImagePreview(null);
+      setHasUnsavedChanges(false);
+      setSaveState("idle");
+      setSaveConflictInfo(null);
+      setTitle(immediateDraft.title);
+      setTagsText(immediateDraft.tagsText);
+      setMobilePlainText(immediateDraft.contentMarkdown);
+      setMobilePlainTextElementValue(mobileTextAreaRef.current, immediateDraft.contentMarkdown);
+      hydrateMarkdownSource(memo.id, immediateDraft.contentJson, immediateDraft.contentMarkdown);
+      if (isEditorReady(currentEditor)) {
+        try {
+          resetEditorDocument(currentEditor, immediateDraft.contentJson);
+        } catch (err) {
+          console.error("Failed to reset TipTap document, falling back to setContent:", err);
+          currentEditor.commands.setContent(immediateDraft.contentJson);
+        }
+      }
+      appliedEditorSourceKeyRef.current = immediateDraft.sourceKey;
+      hydratedMemoIdRef.current = memo.id;
+      setHydratedEditorMemoId(memo.id);
     }
 
     // While the user still has unsaved keystrokes, ignore memo prop churn entirely
@@ -2117,6 +2267,46 @@ const RichEditorPane = ({
         return;
       }
 
+      const queuedPayload = queuedUpdate?.kind === "memo.update"
+        ? queuedUpdate.payload as MemoUpdateSyncPayload
+        : null;
+      if (
+        isDesktopResourceRuntime()
+        && (
+          contentReferencesStagedResourceUrl(draft?.contentJson)
+          || contentReferencesStagedResourceUrl(queuedPayload?.contentJson)
+          || contentReferencesStagedResourceUrl(queuedPayload?.contentMarkdown)
+        )
+      ) {
+        const [listed, staged] = await Promise.all([
+          repository.listResources().catch(() => ({ resources: [] as Array<{ memoId?: string; url: string; filename?: string | null; kind?: string | null }> })),
+          window.edgeeverDesktop?.listStagedResources?.().catch(() => []) ?? Promise.resolve([]),
+        ]);
+        if (cancelled) return;
+        const liveStagedIds = new Set((staged ?? []).filter((item) => item.memoId === memo.id).map((item) => item.id));
+        const memoResources = listed.resources.filter((resource) => resource.memoId === memo.id);
+        if (draft && contentReferencesStagedResourceUrl(draft.contentJson)) {
+          draft = {
+            ...draft,
+            contentJson: repairTiptapStagedResourceUrls(draft.contentJson, memoResources, liveStagedIds),
+          };
+        }
+        if (queuedUpdate && queuedPayload) {
+          const repairedQueue = repairMemoStagedResourceUrls({
+            contentJson: queuedPayload.contentJson,
+            contentMarkdown: queuedPayload.contentMarkdown,
+          }, memoResources, liveStagedIds);
+          queuedUpdate = {
+            ...queuedUpdate,
+            payload: {
+              ...queuedPayload,
+              contentJson: repairedQueue.contentJson ?? queuedPayload.contentJson,
+              contentMarkdown: repairedQueue.contentMarkdown,
+            },
+          };
+        }
+      }
+
       if (queuedUpdate && isMemoUpdateAlreadyApplied(memo, queuedUpdate)) {
         await Promise.all([
           localDb.syncQueue.delete(queuedUpdate.id),
@@ -2153,7 +2343,7 @@ const RichEditorPane = ({
         title === nextTitle &&
         tagsText === nextTagsText
       );
-      const sourceAlreadyApplied = alreadyHydratedSameMemo && appliedEditorSourceKeyRef.current === sourceKey;
+      const sourceAlreadyApplied = appliedEditorSourceKeyRef.current === sourceKey;
 
       // Skip a full document replace when content already matches — setContent
       // always resets the selection and feels like a line jump / jump-to-end.
@@ -2206,14 +2396,19 @@ const RichEditorPane = ({
       setTitle(nextTitle);
       setTagsText(nextTagsText);
       setMobilePlainText(nextMarkdown);
-      hydrateMarkdownSource(memo.id, nextContent, nextMarkdown);
+      const keptLiveMarkdown = hydrateMarkdownSource(memo.id, nextContent, nextMarkdown);
       setMobilePlainTextElementValue(mobileTextAreaRef.current, nextMarkdown);
 
-      if (isEditorReady(currentEditor) && shouldReplaceDocument) {
+      if (isEditorReady(currentEditor) && shouldReplaceDocument && !keptLiveMarkdown) {
         try {
-          currentEditor.commands.setContent(nextContent);
+          if (sameMemo) {
+            currentEditor.commands.setContent(nextContent);
+          } else {
+            resetEditorDocument(currentEditor, nextContent);
+          }
         } catch (err) {
           console.error("Failed to set TipTap contentJson, falling back to markdownToDoc:", err);
+          releaseEditorMedia(currentEditor);
           currentEditor.commands.setContent(markdownToDoc(nextMarkdown));
         }
 
@@ -2439,13 +2634,9 @@ const RichEditorPane = ({
   }, [memo]);
 
   useEffect(() => {
-    if (!useMobilePlainTextEditor) {
-      return;
-    }
-
     const persistBeforeSuspend = () => {
       if (hasUnsavedChangesRef.current) {
-        persistCurrentDraft(title, tagsText, getMobilePlainTextValue());
+        void persistCurrentDraft(title, tagsText, getMobilePlainTextValue());
       }
     };
     const persistWhenHidden = () => {
@@ -2456,12 +2647,16 @@ const RichEditorPane = ({
 
     window.addEventListener("pagehide", persistBeforeSuspend);
     document.addEventListener("visibilitychange", persistWhenHidden);
+    const stopHibernatePrepare = window.edgeeverDesktop?.onHibernatePrepare?.(async () => {
+      await persistCurrentDraft(title, tagsText, getMobilePlainTextValue());
+    });
 
     return () => {
       window.removeEventListener("pagehide", persistBeforeSuspend);
       document.removeEventListener("visibilitychange", persistWhenHidden);
+      stopHibernatePrepare?.();
     };
-  }, [getMobilePlainTextValue, persistCurrentDraft, tagsText, title, useMobilePlainTextEditor]);
+  }, [getMobilePlainTextValue, persistCurrentDraft, tagsText, title]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -3010,7 +3205,7 @@ const RichEditorPane = ({
     setTitle(nextTitle);
     setTagsText(nextTagsText);
     setMobilePlainText(nextMarkdown);
-    hydrateMarkdownSource(remoteMemo.id, nextContent, nextMarkdown);
+    hydrateMarkdownSource(remoteMemo.id, nextContent, nextMarkdown, { force: true });
     setMobilePlainTextElementValue(mobileTextAreaRef.current, nextMarkdown);
 
     const currentEditor = editorRef.current;
@@ -3274,6 +3469,34 @@ const RichEditorPane = ({
         onApply={applyExternalLink}
         onRemove={removeExternalLink}
       />
+      <MathFormulaDialog
+        open={mathFormulaOpen}
+        draft={mathFormulaDraft}
+        onOpenChange={setMathFormulaOpen}
+        onApply={(draft) => {
+          if (!isEditorReady(editor) || effectiveReadOnly) return;
+          const stored = mathFormulaDraftRef.current;
+          applyMathFormula(editor, {
+            ...draft,
+            from: stored?.from ?? draft.from,
+            to: stored?.to ?? draft.to,
+            pos: stored?.pos ?? draft.pos,
+          });
+          editor.chain().focus(stored?.from ?? draft.from ?? null, { scrollIntoView: true }).run();
+        }}
+        onRemove={
+          mathFormulaDraft && typeof mathFormulaDraft.pos === "number"
+            ? () => {
+              if (!isEditorReady(editor) || effectiveReadOnly) return;
+              const stored = mathFormulaDraftRef.current;
+              const pos = stored?.pos ?? mathFormulaDraft.pos;
+              if (typeof pos !== "number") return;
+              deleteMathFormula(editor, { kind: stored?.kind ?? mathFormulaDraft.kind, pos });
+              editor.chain().focus(pos, { scrollIntoView: true }).run();
+            }
+            : undefined
+        }
+      />
       {noteLinkPickerOpen && (
         <EditorNoteLinkPicker
           query={noteLinkQuery}
@@ -3316,7 +3539,7 @@ const RichEditorPane = ({
                 disabled={effectiveReadOnly}
                 onClick={() => setShareOpen(true)}
               >
-                <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+                <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="hidden sm:inline">{t("sharing.active")}</span>
               </button>
             )}
@@ -3539,7 +3762,7 @@ const RichEditorPane = ({
                     disabled={isLocalMemoId(memo.id)}
                     onClick={() => setShareOpen(true)}
                   >
-                    <Link2 className={cn("h-4 w-4", isMemoShared ? "text-emerald-600" : "text-slate-500")} />
+                    <Share2 className={cn("h-4 w-4", isMemoShared ? "text-emerald-600" : "text-slate-500")} />
                     {t(isLocalMemoId(memo.id) ? "sharing.afterSync" : isMemoShared ? "sharing.manage" : "sharing.action")}
                   </DropdownMenuItem>
                 )}
@@ -3568,7 +3791,7 @@ const RichEditorPane = ({
                   className="flex h-9 w-full items-center gap-2 px-3 text-left text-sm text-slate-700 hover:bg-slate-50 cursor-pointer outline-none"
                   onClick={handleOpenImageShare}
                 >
-                  <Share2 className="h-4 w-4 text-slate-500" />
+                  <ImageIcon className="h-4 w-4 text-slate-500" />
                   {t("editor.imageShare.action")}
                 </DropdownMenuItem>
                 {readOnly ? (
@@ -3696,6 +3919,7 @@ const RichEditorPane = ({
             onPickExternalLink={openExternalLinkDialog}
             externalLinkActive={externalLinkActive}
             onPickNoteLink={() => setNoteLinkPickerOpen(true)}
+            onPickMathFormula={() => openMathFormula()}
           />
         )}
         <EditorSaveRecoveryBanner
@@ -3861,6 +4085,7 @@ const RichEditorPane = ({
               </div>
             ) : (
               <div
+                className="relative"
                 onMouseOver={handleEditorMouseOver}
                 onMouseOut={handleEditorMouseOut}
                 onFocusCapture={handleEditorFocusCapture}
@@ -3883,6 +4108,9 @@ const RichEditorPane = ({
                     {t("aiAssistant.openForSelection")}
                   </Button>
                 </BubbleMenu>
+                {!isMobileViewport && !effectiveReadOnly && isEditorReady(editor) ? (
+                  <EditorBlockDragHandle editor={editor} />
+                ) : null}
                 <EditorContent editor={editor} />
               </div>
             )}

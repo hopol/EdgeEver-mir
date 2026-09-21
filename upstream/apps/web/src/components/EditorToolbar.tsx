@@ -18,16 +18,20 @@ import {
   Paperclip,
   Link,
   Link2,
+  Sigma,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MEMO_EDITOR_TOOLBAR_COLLAPSED_CLASS_NAME } from "@/components/MemoEditorChromeDensity";
 import { MemoEditorToolbarDivider, MemoEditorToolbarRow } from "@/components/MemoEditorToolbarChrome";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  EDITOR_HEADING_LEVELS,
   formatShortcutBinding,
   getActiveBlockValue,
+  parseHeadingBlockValue,
   readEditorToolbarExpandedPreference,
   writeEditorToolbarExpandedPreference,
   type ShortcutBinding,
@@ -152,6 +156,7 @@ export const EditorToolbar = ({
   onPickAttachment,
   onPickExternalLink,
   onPickNoteLink,
+  onPickMathFormula,
   externalLinkActive = false,
 }: {
   editor: Editor | null;
@@ -163,6 +168,7 @@ export const EditorToolbar = ({
   /** Insert or edit an external hyperlink (not a note reference). */
   onPickExternalLink?: () => void;
   onPickNoteLink?: () => void;
+  onPickMathFormula?: () => void;
   externalLinkActive?: boolean;
 }) => {
   const { t } = useTranslation();
@@ -209,9 +215,13 @@ export const EditorToolbar = ({
       const availableWidth = Math.max(0, controls.clientWidth - horizontalPadding);
       const next = requiredWidth > availableWidth + 1;
       const firstRowTop = Math.min(...visibleItems.map((item) => item.offsetTop));
+      const controlHeight = visibleItems.reduce((max, item) => Math.max(max, item.offsetHeight), 0);
+      const wrappedRowStart = firstRowTop + controlHeight * 0.75;
 
       visibleItems.forEach((item) => {
-        item.inert = !expanded && next && item.offsetTop > firstRowTop + 1;
+        const wrapped = !expanded && next && item.offsetTop >= wrappedRowStart;
+        item.inert = wrapped;
+        item.classList.toggle("invisible", wrapped);
       });
 
       setHasOverflow((current) => {
@@ -226,7 +236,10 @@ export const EditorToolbar = ({
     return () => {
       observer.disconnect();
       Array.from(controls.children).forEach((child) => {
-        if (child instanceof HTMLElement) child.inert = false;
+        if (child instanceof HTMLElement) {
+          child.inert = false;
+          child.classList.remove("invisible");
+        }
       });
     };
   });
@@ -270,18 +283,9 @@ export const EditorToolbar = ({
         return;
       }
 
-      if (value === "heading-1") {
-        chain.setHeading({ level: 1 }).run();
-        return;
-      }
-
-      if (value === "heading-2") {
-        chain.setHeading({ level: 2 }).run();
-        return;
-      }
-
-      if (value === "heading-3") {
-        chain.setHeading({ level: 3 }).run();
+      const headingLevel = parseHeadingBlockValue(value);
+      if (headingLevel) {
+        chain.setHeading({ level: headingLevel }).run();
       }
     });
   };
@@ -298,7 +302,7 @@ export const EditorToolbar = ({
           ref={controlsRef}
           className={cn(
             hasOverflow && "pr-14 sm:pr-16",
-            !expanded && "max-h-12 overflow-hidden"
+            !expanded && MEMO_EDITOR_TOOLBAR_COLLAPSED_CLASS_NAME
           )}
         >
           {onMarkdownModeChange && (
@@ -433,9 +437,11 @@ export const EditorToolbar = ({
             </SelectTrigger>
             <SelectContent className="bg-card border border-slate-200 rounded-md py-1 shadow-md">
               <SelectItem value="paragraph">{t("editorToolbar.paragraph")}</SelectItem>
-              <SelectItem value="heading-1">{t("editorToolbar.heading1")}</SelectItem>
-              <SelectItem value="heading-2">{t("editorToolbar.heading2")}</SelectItem>
-              <SelectItem value="heading-3">{t("editorToolbar.heading3")}</SelectItem>
+              {EDITOR_HEADING_LEVELS.map((level) => (
+                <SelectItem key={level} value={`heading-${level}`}>
+                  {t(`editorToolbar.heading${level}`)}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -561,6 +567,16 @@ export const EditorToolbar = ({
           >
             <ChartNoAxesCombined className="h-4 w-4" />
           </EditorToolbarButton>
+          {onPickMathFormula && (
+            <EditorToolbarButton
+              title={t("editorToolbar.math")}
+              active={isActive("inlineMath") || isActive("blockMath")}
+              disabled={disabled}
+              onClick={onPickMathFormula}
+            >
+              <Sigma className="h-4 w-4" />
+            </EditorToolbarButton>
+          )}
           <EditorToolbarButton
             title={t("editorToolbar.horizontalRule")}
             disabled={disabled}

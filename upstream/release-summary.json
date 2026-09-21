@@ -1,23 +1,20 @@
 {
-  "version": "1.74.0",
+  "version": "1.80.0",
   "changes": {
     "en-US": [
-      "Add Agent mode to the in-app AI assistant so it can search, organize, and write notes; the standalone Paw page, discovery hub, and settings tab are gone, with those capabilities folded into the assistant. The open note is context rather than a search filter, note writes apply immediately, and the transcript stays on the newest reply.",
-      "Prevent a single tray or menu-bar screenshot from creating two notes.",
-      "Make the macOS menu-bar cat a heavier template glyph that matches neighboring status icons.",
-      "Shorten plugin marketplace copy so the header stays aligned with its actions."
+      "Add block drag handles and formula insertion in the editor, with caret-aware insertion and a clearer table icon.",
+      "Show the Mac product name and physical screen resolution more accurately in system information.",
+      "Make emptying the trash reliable when it is already empty."
     ],
     "zh-CN": [
-      "内置 AI 助手新增 Agent 模式，可检索、整理并直接改笔记；独立的爪印页面、发现中心和设置页已下线，能力都收进助手。当前打开的笔记只作为上下文，不会限制搜索范围；笔记写入立即生效，对话会跟着最新回复滚动。",
-      "从托盘或菜单栏截屏时，同一次操作不会再生成两篇笔记。",
-      "macOS 菜单栏猫咪图标加粗描边，和其他状态图标一样清晰。",
-      "缩短插件市场说明文案，让标题行与操作按钮对齐。"
+      "编辑器新增内容块拖拽手柄与公式插入，并支持在光标处插入公式及更清晰的表格图标。",
+      "系统信息现在能更准确地显示 Mac 产品名称和物理屏幕分辨率。",
+      "修复废纸篓已为空时再次清空可能失败的问题。"
     ],
     "ja": [
-      "アプリ内 AI アシスタントに Agent モードを追加し、ノートの検索・整理・書き込みができるようにしました。独立した Paw ページ、発見ハブ、設定タブは廃止し、それらの機能はアシスタントに統合しています。開いているノートは検索範囲ではなく文脈として扱い、ノートの書き込みは即時反映され、会話は最新の返信に追従します。",
-      "トレイまたはメニューバーからのスクリーンショットが、1回の操作で2つのノートを作らないようにしました。",
-      "macOS メニューバーの猫アイコンを、他のステータスアイコンと同じ太さのテンプレート画像にしました。",
-      "プラグインマーケットの説明文を短くし、見出し行と操作ボタンが揃うようにしました。"
+      "エディターにブロックのドラッグハンドルと数式挿入を追加し、カーソル位置への挿入と分かりやすい表アイコンに対応しました。",
+      "システム情報でMacの製品名と物理画面解像度をより正確に表示するようになりました。",
+      "ゴミ箱がすでに空の場合でも、空にする操作が失敗しないよう修正しました。"
     ]
   }
 }

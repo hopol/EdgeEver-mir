@@ -52,10 +52,12 @@ interface EdgeEverDesktopBridge {
     autoUpdateSupported: boolean;
     platform: string;
     architecture: string;
+    deviceModel: string;
     osVersion: string;
     osRelease: string;
     electron: string;
     chrome: string;
+    dataDir: string;
   }>;
   setAccountScope(accountId: string | null): Promise<{ ready: true; scope: string }>;
   updateStatus(): Promise<DesktopUpdateStatus>;
@@ -75,6 +77,7 @@ interface EdgeEverDesktopBridge {
   readResource(id: string): Promise<{ type: string; bytes: Uint8Array }>;
   removeStagedResource(id: string): Promise<void>;
   onCommand(callback: (command: string) => void): () => void;
+  onHibernatePrepare?(callback: () => void | Promise<void>): () => void;
   syncScheduledTasks(tasks: import("@edgeever/shared").ScheduledTask[]): Promise<{ scheduled: number }>;
   onScheduledTask(callback: (payload: {
     task: import("@edgeever/shared").ScheduledTask;

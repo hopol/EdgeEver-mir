@@ -24,6 +24,7 @@ import { MobileBottomNav, MobileNotebookPicker } from "./WorkspaceMobileChrome";
 import { QuickMemoSwitcher } from "./QuickMemoSwitcher";
 import { AppConfirmDialog, MemoDeleteConfirmDialog, NotebookNameDialog } from "./dialogs/ConfirmDialogs";
 import { PluginPanelDialog } from "./plugins/PluginPanelDialog";
+import { shouldDiscardPluginNoteSearchRequest } from "./editor/note-search";
 import { api, getOrCreateClientDeviceId } from "@/lib/api";
 import { MarkdownExportMemoryLimitError, type MarkdownExportProgress } from "@/lib/markdown-export";
 import { exportSelectedMemosAsMarkdownZip } from "@/lib/selected-markdown-export";
@@ -77,6 +78,7 @@ import { useBrowserBackLayer } from "@/lib/app-hooks";
 import { updateMemoSummaryInLists, type MemoListQueryData } from "@/lib/memo-list-cache";
 import {
   cacheMemoDetail,
+  evictIdleMemoDetails,
   clearTrashMemoLists,
   collectMemoSummariesFromCache,
   decrementNotebookMemoCounts,
@@ -121,11 +123,17 @@ import { loadResolvedPluginMarketplace } from "@/lib/plugins/plugin-marketplace"
 import { updateOfficialMarketplacePlugins } from "@/lib/plugins/plugin-updates";
 import { createPublicNetworkAdapter } from "@/lib/plugins/public-network-adapter";
 import { clearRendererRecoveryRequired, isRendererRecoveryRequired } from "@/lib/renderer-recovery";
+import {
+  readDesktopWorkspaceRestoreState,
+  shouldRestoreDesktopWorkspace,
+  writeDesktopWorkspaceRestoreState,
+} from "@/lib/desktop-workspace-restore";
 import { EditorPaneErrorBoundary, EditorRecoveryPane } from "./EditorPaneErrorBoundary";
 import { isMarkdownFile, readMarkdownFile } from "@/lib/markdown-file-import";
 import { compressImageForUpload } from "@/lib/image-compression";
 import { createScreenshotMemo, screenshotFileFromImportPayload, screenshotImportDedupeKey, screenshotImportGate } from "@/lib/screenshot-import";
 import { isDesktopResourceRuntime, stageDesktopResource, toDesktopResourceUrl } from "@/lib/desktop-resources";
+import { findMatchingMemoResource } from "@/lib/staged-resource-repair";
 
 const EditorPane = lazy(() => import("./EditorPane").then((module) => ({ default: module.EditorPane })));
 const DiagramEditorPane = lazy(() => import("./DiagramEditorPane"));
@@ -204,8 +212,15 @@ export const WorkspaceApp = ({
   const [rendererRecoveryMode, setRendererRecoveryMode] = useState(() =>
     Boolean(window.edgeeverDesktop?.recoveredAfterAbnormalExit) || isRendererRecoveryRequired()
   );
+  const [desktopWorkspaceRestore] = useState(() => (
+    shouldRestoreDesktopWorkspace() && !isRendererRecoveryRequired()
+      ? readDesktopWorkspaceRestoreState()
+      : null
+  ));
   const [activePane, setActivePane] = useState<Pane>(() => ((isInitialSettingsRoute || isInitialPluginsRoute || isInitialTemplatesRoute || isInitialAiPromptsRoute || isInitialExecutionCenterRoute) && !isInitialMobileEditorReturn ? "editor" : "memos"));
-  const [memoView, setMemoView] = useState<MemoView>(() => (isTrashRoute ? "trash" : "notebook"));
+  const [memoView, setMemoView] = useState<MemoView>(() => (
+    isTrashRoute ? "trash" : desktopWorkspaceRestore?.memoView ?? "notebook"
+  ));
   const {
     beginMemoSelection,
     clearMemoSelection,
@@ -221,13 +236,22 @@ export const WorkspaceApp = ({
     setSelectedMemoIds,
     setSelectedNotebookId,
     setSelectionMoveTargetNotebookId,
-  } = useWorkspaceSelection();
+  } = useWorkspaceSelection(desktopWorkspaceRestore);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const autoSelectedDemoNotebookRef = useRef(false);
   const [createdMemoEditId, setCreatedMemoEditId] = useState<string | null>(null);
   const pendingCreatedMemoIdRef = useRef<string | null>(null);
-  const pendingQuickSwitcherMemoIdRef = useRef<string | null>(null); // also companion/plugin opens not yet in the list
+  const pendingQuickSwitcherMemoIdRef = useRef<string | null>(desktopWorkspaceRestore?.selectedMemoId ?? null); // also companion/plugin opens not yet in the list
+  useEffect(() => {
+    if (!window.edgeeverDesktop?.isAvailable) return;
+    writeDesktopWorkspaceRestoreState({
+      selectedMemoId,
+      selectedNotebookId,
+      memoView,
+    });
+  }, [memoView, selectedMemoId, selectedNotebookId]);
   const creatingMemoSelectionRef = useRef(false);
+  const createMemoInFlightRef = useRef(false);
   const memoDocumentActionIdRef = useRef(0);
   const [memoDocumentActionRequest, setMemoDocumentActionRequest] = useState<MemoDocumentActionRequest | null>(null);
   const [memoDeleteConfirmation, setMemoDeleteConfirmation] = useState<MemoDeleteConfirmation | null>(null);
@@ -1118,6 +1142,15 @@ export const WorkspaceApp = ({
     queryFn: () => repository.getMemo(detailMemoId as string, memoView === "trash"),
     enabled: Boolean(detailMemoId),
   });
+  const prefetchMemoDetail = useCallback((memoId: string) => {
+    void queryClient.prefetchQuery({
+      queryKey: memoDetailQueryKey(memoId, memoView),
+      queryFn: () => repository.getMemo(memoId, memoView === "trash"),
+    });
+  }, [memoView, queryClient, repository]);
+  useEffect(() => {
+    evictIdleMemoDetails(queryClient, detailMemoId);
+  }, [detailMemoId, queryClient]);
 
   useEffect(() => {
     const handleMemoDetailRefreshed = (event: Event) => {
@@ -1234,6 +1267,9 @@ export const WorkspaceApp = ({
     onError: () => {
       clearPendingCreatedMemo();
       setCreatedMemoEditId(null);
+    },
+    onSettled: () => {
+      createMemoInFlightRef.current = false;
     },
   });
 
@@ -1678,6 +1714,13 @@ export const WorkspaceApp = ({
             return { url: toDesktopResourceUrl(resource.url), filename: resource.filename };
           } catch (error) {
             if (!isDesktopResourceRuntime()) throw error;
+            const listed = await repository.listResources().catch(() => ({ resources: [] as Array<{ memoId?: string; url: string; filename?: string | null; kind?: string | null }> }));
+            const existing = findMatchingMemoResource(
+              listed.resources.filter((resource) => resource.memoId === memoId),
+              uploadFile.name,
+              "image",
+            );
+            if (existing) return { url: toDesktopResourceUrl(existing.url), filename: existing.filename || uploadFile.name };
             const staged = await stageDesktopResource(memoId, uploadFile);
             if (!staged) throw error;
             return { url: `edgeever-staged://${staged.id}`, filename: uploadFile.name };
@@ -1716,6 +1759,13 @@ export const WorkspaceApp = ({
     if (!targetNotebookId || memoView === "trash") {
       return;
     }
+
+    // Desktop Cmd+N is handled by both the native menu and the in-app shortcut.
+    // A second click can also land before React Query flips `isPending`.
+    if (createMemoInFlightRef.current || createMemoMutation.isPending) {
+      return;
+    }
+    createMemoInFlightRef.current = true;
 
     setTemplatesOpen(false);
     setMobileBottomNavActive("home");
@@ -2208,6 +2258,12 @@ export const WorkspaceApp = ({
   }, [clearMemoSelection, clearPendingCreatedMemo, navigateWorkspaceHome, setSelectedMemoId, setSelectedNotebookId]);
 
   useEffect(() => pluginHost.setNavigationAdapter({ openNote: handleOpenPluginNote }), [handleOpenPluginNote, pluginHost]);
+
+  useEffect(() => {
+    if (shouldDiscardPluginNoteSearchRequest(pluginNavigationRequest, selectedMemoId)) {
+      setPluginNavigationRequest(null);
+    }
+  }, [pluginNavigationRequest, selectedMemoId]);
 
   const handleCancelMobileSearch = () => {
     setSearch("");
@@ -2977,6 +3033,7 @@ export const WorkspaceApp = ({
                 setSelectedMemoId(memoId);
                 setActivePane("editor");
               }}
+              onPrefetchMemo={prefetchMemoDetail}
               onToggleMemo={(memoId, rangeMemoIds) => {
                 setMemoSelectionMode(true);
                 setSelectedMemoIds((current) => {

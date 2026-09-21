@@ -28,6 +28,8 @@ import {
   markdownToDoc,
   MEMO_CONTENT_STYLE,
   createEdgeEverDocumentExtensions,
+  DETAILS_EDITOR_CSS,
+  wrapDetailsContentHtml,
   NativeAttachmentMetadata,
   normalizeAiSelectionReplacement,
   prepareNativeEditorContent,
@@ -795,6 +797,7 @@ function LocalTiptapEditorImpl(props: LocalTiptapEditorProps) {
       attributes: getMobileEditorInputAttributes(
         isViewer ? "edgeever-editor-content edgeever-viewer-content" : "edgeever-editor-content"
       ),
+      transformPastedHTML: (html) => wrapDetailsContentHtml(html),
       handleDOMEvents: {
         // Intercept attachment anchors before ProseMirror's later click phase so
         // the embedded file:// WebView never follows relative resource URLs.
@@ -2967,6 +2970,7 @@ const getEditorStyles = (theme: "light" | "dark", options?: { viewer?: boolean }
   :root {
     color-scheme: ${theme};
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-feature-settings: "chws" 1;
     /* Match PC/Web memo body (MEMO_CONTENT_STYLE) so notes don't feel oversized on phone. */
     --editor-body-font-size: ${bodyFontSize}px;
     --editor-body-line-height: ${bodyLineHeight};
@@ -3081,6 +3085,7 @@ const getEditorStyles = (theme: "light" | "dark", options?: { viewer?: boolean }
     line-height: var(--editor-body-line-height);
     overflow-wrap: anywhere;
     word-break: break-word;
+    font-feature-settings: "chws" 1;
     caret-color: ${options?.viewer ? "transparent" : "#0f766e"};
   }
   .edgeever-viewer-content { -webkit-user-select: text; user-select: text; cursor: text; }
@@ -3104,7 +3109,10 @@ const getEditorStyles = (theme: "light" | "dark", options?: { viewer?: boolean }
   .edgeever-editor-content p.is-editor-empty:first-child::before { float: left; height: 0; color: #94a3b8; content: attr(data-placeholder); pointer-events: none; }
   .edgeever-editor-content h1,
   .edgeever-editor-content h2,
-  .edgeever-editor-content h3 {
+  .edgeever-editor-content h3,
+  .edgeever-editor-content h4,
+  .edgeever-editor-content h5,
+  .edgeever-editor-content h6 {
     max-width: 100%;
     overflow-wrap: anywhere;
     line-height: 1.3;
@@ -3113,6 +3121,9 @@ const getEditorStyles = (theme: "light" | "dark", options?: { viewer?: boolean }
   .edgeever-editor-content h1 { margin: 0.7em 0 0.4em; font-size: 1.6rem; }
   .edgeever-editor-content h2 { margin: 0.85em 0 0.35em; font-size: 1.35rem; }
   .edgeever-editor-content h3 { margin: 0.75em 0 0.3em; font-size: 1.15rem; }
+  .edgeever-editor-content h4 { margin: 0.7em 0 0.28em; font-size: 1.05rem; font-weight: 700; }
+  .edgeever-editor-content h5 { margin: 0.65em 0 0.25em; font-size: 1rem; font-weight: 700; }
+  .edgeever-editor-content h6 { margin: 0.6em 0 0.22em; font-size: 0.95rem; font-weight: 700; }
   .edgeever-editor-content ul[data-type="taskList"] { margin: 0 0 var(--editor-paragraph-spacing); padding-left: 0; list-style: none; }
   .edgeever-editor-content ul[data-type="taskList"] li[data-checked] { display: flex; align-items: flex-start; gap: 9px; margin: 4px 0; }
   .edgeever-editor-content ul[data-type="taskList"] li[data-checked] > label { display: inline-flex; flex: 0 0 auto; align-items: center; margin-top: 3px; user-select: none; }
@@ -3193,6 +3204,7 @@ const getEditorStyles = (theme: "light" | "dark", options?: { viewer?: boolean }
     font-size: 12px;
     font-weight: 600;
   }
+  ${DETAILS_EDITOR_CSS}
   .edgeever-editor-content .edgeever-unsupported-content--block { display: block; margin: 8px 0; padding: 12px; }
   .edgeever-editor-content .edgeever-unsupported-content--inline { display: inline-block; margin: 0 2px; padding: 2px 6px; }
   .edgeever-editor-content .edgeever-unsupported-mark { border-bottom: 1px dashed ${theme === "dark" ? "#94a3b8" : "#64748b"}; }
