@@ -104,12 +104,16 @@ describe("release automation", () => {
     const publication = releaseSource.indexOf('"--draft=false"');
     const iosWait = releaseSource.indexOf('label: "App Store delivery"');
     const restoreDraft = releaseSource.lastIndexOf('"--draft=true"');
+    const issueClose = releaseSource.indexOf('"issue",\n    "close"', publication);
 
     expect(iosPlan).toBeGreaterThan(0);
     expect(iosDispatch).toBeGreaterThan(iosPlan);
     expect(iosDispatch).toBeLessThan(publication);
     expect(iosWait).toBeGreaterThan(publication);
     expect(iosWait).toBeGreaterThan(restoreDraft);
+    expect(issueClose).toBeGreaterThan(restoreDraft);
+    expect(issueClose).toBeLessThan(iosWait);
+    expect(releaseSource).toContain("is closed; App Store delivery failed");
     expect(releaseSource).toContain('platform: "ios"');
     expect(releaseSource).toContain("iosRebuild: iosPlan.rebuild");
     expect(releaseSource).toContain("updateIosMarketingVersion");
@@ -165,6 +169,26 @@ describe("release automation", () => {
     recordCheckpointRun(checkpoint, "mobileRunId", 13);
     recordCheckpointRun(checkpoint, "mobileRunId", 13);
     expect(checkpointRunIds(checkpoint)).toEqual([11, 12, 13]);
+  });
+
+  test("keeps an active App Store delivery when a Draft advances without iOS changes", () => {
+    const storedState = {
+      releaseSha: "old",
+      desktopRunId: 11,
+      iosStoreRunId: 12,
+    };
+    const checkpoint = prepareReleaseCheckpoint({
+      storedState,
+      releaseSha: "new",
+      preserveIosStoreRun: true,
+    });
+    expect(checkpoint.iosStoreRunId).toBe(12);
+    expect(checkpoint.desktopRunId).toBeUndefined();
+    expect(checkpoint.runHistory).toContainEqual({
+      field: "iosStoreRunId",
+      runId: 12,
+      releaseSha: "old",
+    });
   });
 
   test("verifies an immutable Play delivery without uploading across mobile-compatible fixes", () => {
@@ -448,11 +472,13 @@ describe("release automation", () => {
       changesZh: ["优化发布流程。"],
       issueNumber: 126,
     });
+    expect(notes).toContain("## 主要更新");
     expect(notes).toContain("## Key Changes");
     expect(notes).toContain("Related Issue: #126");
-    expect(notes).toContain("## 🇨🇳 中文说明 / Chinese Changelog");
     expect(notes).toContain("关联 Issue：#126");
-    expect(notes.indexOf("## 🇨🇳 中文说明 / Chinese Changelog"))
+    expect(notes).not.toContain("中文说明");
+    expect(notes).not.toContain("Chinese Changelog");
+    expect(notes.indexOf("## 主要更新"))
       .toBeLessThan(notes.indexOf("## Key Changes"));
     expect(notes.indexOf("优化发布流程。"))
       .toBeLessThan(notes.indexOf("Improve the release flow."));

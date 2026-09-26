@@ -23,6 +23,12 @@ EdgeEver P0 扩展 API 支持受信任的客户端插件和无代码主题包。
   "apiVersion": "2",
   "settingsUi": "host",
   "description": "Adds a command for recent notes.",
+  "locales": {
+    "zh-CN": {
+      "name": "最近笔记",
+      "description": "添加一个查看最近笔记的命令。"
+    }
+  },
   "entry": "./main.js",
   "platforms": ["web", "desktop"],
   "permissions": ["notes:read", "editor:read", "ui:commands", "ui:notices", "ui:panels"]
@@ -30,6 +36,8 @@ EdgeEver P0 扩展 API 支持受信任的客户端插件和无代码主题包。
 ```
 
 Manifest 和 JavaScript 模块必须返回允许 EdgeEver 来源访问的 CORS 响应头。相对 `entry` 地址基于 Manifest 地址解析。
+
+顶层必填的 `name` 与可选的 `description` 保持为回退文案。插件与主题可以增加以 BCP 47 语言标签为键的 `locales` 对象，例如 `zh-CN`、`en-US` 或 `ja`；每种语言可覆盖 `name`、`description` 或两者。EdgeEver 会先匹配当前界面语言，再匹配相同基础语言，最后回退到顶层字段。这里本地化的是插件市场与插件管理页的元数据；运行时命令、面板、通知及宿主渲染的设置项标签仍由插件自行负责本地化。
 
 ## 通过 GitHub 分发
 
@@ -73,6 +81,12 @@ Registry 格式：
     "id": "com.example.recent-notes",
     "name": "Recent Notes",
     "description": "Shows recently updated notes.",
+    "locales": {
+      "zh-CN": {
+        "name": "最近笔记",
+        "description": "显示最近更新的笔记。"
+      }
+    },
     "author": "EdgeEver",
     "publisher": "edgeever",
     "category": "Productivity",
@@ -584,7 +598,7 @@ const result = await context.ai.generate({
 });
 ```
 
-`system` 最多 8,000 字符，`prompt` 最多 90,000 字符，输出最多 5,000 token，生成最长 120 秒。后端要求交互式用户会话，公开演示模式禁用 AI，供应商错误脱敏。每个后端实例对每工作区的 AI 调用设置四路并发保护，不是分布式配额。模型费用沿用已配置供应商的计费；停用插件会中止其调用。
+`system` 最多 8,000 字符，`prompt` 最多 90,000 字符。`maxOutputTokens` 必须是正整数，省略时默认 3,000；宿主不设置输出 token 的最大值。生成最长 120 秒。模型或供应商可能有自己的限制，也可能因可用额度不足拒绝请求。后端要求交互式用户会话，公开演示模式禁用 AI，供应商错误脱敏。每个后端实例对每工作区的 AI 调用设置四路并发保护，不是分布式配额。模型费用沿用已配置供应商的计费；停用插件会中止其调用。
 
 默认的 `network.fetch(url, init)` 是受信任的浏览器请求，可以访问任意 HTTP／HTTPS 地址，使用任意方法、正文、`Authorization` 等请求头以及调用方指定的浏览器凭据模式；它仍受所在运行时的 CORS 与 Cookie 策略约束。`networkHosts` 仅为兼容旧版保留，不是安全边界。需要无凭据读取跨域公开订阅或 API 时，显式选择 `transport: "public"` 即可；列出 `network` 和 `network:public` 仍有助于披露用途，但不是必需条件：
 

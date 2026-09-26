@@ -4,6 +4,7 @@ import { DIAGRAM_READABLE_MIN_SCALE, FLOWCHART_LAYOUT_SPACING } from "./diagram-
 export {
   DIAGRAM_READABLE_MIN_SCALE,
   FLOWCHART_EDGE_ROUTER,
+  FLOWCHART_LABEL_FONT,
   FLOWCHART_LAYOUT_SPACING,
   flowchartEdgeIsStraight,
   flowchartEdgePorts,
@@ -75,6 +76,8 @@ export type DiagramIrNodeType =
   | "external"
   | "boundary";
 
+// Product semantics for mind maps, flowcharts, and architecture diagrams.
+// AntV Infographic syntax is a separate, renderer-native document format.
 export type DiagramIr = {
   kind: DiagramKind;
   theme?: DiagramTheme;

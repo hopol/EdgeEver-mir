@@ -34,6 +34,8 @@ export * from "./desktop-rpc";
 export * from "./details";
 export * from "./deployment-metadata";
 export * from "./diagram";
+export * from "./infographic";
+export * from "./table";
 export * from "./diagram-palette";
 export * from "./diagram-flowchart-style";
 export * from "./diagram-architecture-style";

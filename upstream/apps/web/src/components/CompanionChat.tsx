@@ -279,7 +279,7 @@ export function CompanionChat({
 
   if (!available) {
     return <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto p-4 text-center">
-      <MessageCircle aria-hidden="true" className="h-9 w-9 text-emerald-600" />
+      <MessageCircle aria-hidden="true" className="h-9 w-9 text-slate-500" />
       <p className="max-w-md text-sm leading-relaxed text-slate-600">{t("companion.unavailableHelp")}</p>
     </div>;
   }
@@ -307,7 +307,7 @@ export function CompanionChat({
           <ul className="flex flex-wrap gap-1">
             {turn.mentions.map(mention => {
               const Icon = mentionIcon(mention.type);
-              return <li key={`${mention.type}:${mention.id}`} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+              return <li key={`${mention.type}:${mention.id}`} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                 <Icon className="h-3 w-3" />{mentionLabel(mention)}
               </li>;
             })}
@@ -331,7 +331,7 @@ export function CompanionChat({
         ) : null}
         {turn.status === "running" ? (
           <p role="status" className="flex items-center gap-2 text-xs text-slate-500">
-            <Loader2 className="h-4 w-4 animate-spin text-emerald-600" aria-hidden="true" />
+            <Loader2 className="h-4 w-4 animate-spin text-slate-500" aria-hidden="true" />
             <span className="sr-only">{t("companion.status.running")}</span>
           </p>
         ) : turn.status === "failed" || turn.status === "cancelled" ? (
@@ -348,7 +348,7 @@ export function CompanionChat({
           {mentions.map(mention => {
             const Icon = mentionIcon(mention.type);
             return <li key={`${mention.type}:${mention.id}`}>
-              <button type="button" className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-800"
+              <button type="button" className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-800"
                 aria-label={t("companion.mentions.remove", { title: mentionLabel(mention) })}
                 onClick={() => setMentions(previous => previous.filter(item => item !== mention))}>
                 <Icon className="h-3 w-3" />{mentionLabel(mention)}<X className="h-3 w-3" />
@@ -366,19 +366,19 @@ export function CompanionChat({
                 onClick={() => pickMention(mention)}>
                 <Icon className="h-3.5 w-3.5 text-slate-400" />
                 <span className="min-w-0 flex-1 truncate">{mentionLabel(mention)}</span>
-                <span className="text-[10px] text-slate-400">{t(`companion.mentions.${mention.type === "memo" ? "notes" : mention.type === "notebook" ? "notebooks" : "tags"}`)}</span>
+                <span className="text-xs text-slate-400">{t(`companion.mentions.${mention.type === "memo" ? "notes" : mention.type === "notebook" ? "notebooks" : "tags"}`)}</span>
               </button>
             </li>;
           })}
         </ul>
-      ) : mentionQuery ? <p className="mb-2 text-[11px] text-slate-400">{t("companion.mentions.empty")}</p> : null}
+      ) : mentionQuery ? <p className="mb-2 text-xs text-slate-400">{t("companion.mentions.empty")}</p> : null}
       <label className="sr-only" htmlFor="companion-message">{t("companion.message")}</label>
       <div className="flex items-end gap-2">
         <textarea
           id="companion-message"
           rows={2}
           aria-describedby="companion-ask-hint"
-          className="max-h-32 min-h-10 flex-1 resize-none rounded-md border border-slate-200 px-3 py-2 text-sm leading-5 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/15"
+          className="max-h-32 min-h-10 flex-1 resize-none rounded-md border border-slate-200 px-3 py-2 text-sm leading-5 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
           maxLength={4000}
           value={message}
           disabled={busy}
@@ -409,11 +409,11 @@ export function CompanionChat({
         ) : (
           <Button type="submit" variant="solid" disabled={busy || loading || !message.trim()}>
             {busy ? t("common.processing") : t("companion.send")}
-            {!busy ? <kbd aria-hidden="true" className="ml-1 rounded bg-card/10 px-1 py-0.5 text-[10px] font-medium leading-none text-white/70">↵</kbd> : null}
+            {!busy ? <kbd aria-hidden="true" className="ml-1 rounded bg-card/10 px-1 py-0.5 text-xs font-medium leading-none text-white/70">↵</kbd> : null}
           </Button>
         )}
       </div>
-      <label className="mt-2 flex items-center gap-2 text-[11px] text-slate-500">
+      <label className="mt-2 flex items-center gap-2 text-xs text-slate-500">
         <input type="checkbox" className="rounded border-slate-300" checked={useMemory} disabled={busy || !settings}
           onChange={event => void toggleMemory(event.target.checked)} />
         {t("companion.useMemory")}

@@ -6,8 +6,14 @@ import * as m from "motion/react-m";
 import {
   Activity,
   AppWindow,
+  ArrowDownUp,
+  Binary,
   Blocks,
+  Bot,
   Box,
+  Boxes,
+  Braces,
+  BrainCircuit,
   BrickWall,
   Cable,
   Check,
@@ -18,8 +24,8 @@ import {
   CircleAlert,
   Cloud,
   CloudCog,
-  CloudUpload,
   Code2,
+  Compass,
   Container,
   Copy,
   Cpu,
@@ -27,6 +33,7 @@ import {
   Database,
   DatabaseZap,
   EthernetPort,
+  ExternalLink,
   FileCode2,
   FileClock,
   FileImage,
@@ -34,29 +41,41 @@ import {
   FolderArchive,
   Gauge,
   GitBranch,
+  GitFork,
   Globe2,
+  Gpu,
+  Grid2x2,
   HardDrive,
   History as HistoryIcon,
   KeyRound,
-  Layers3,
+  ListOrdered,
   ListTree,
-  Share2,
   LockKeyhole,
   LoaderCircle,
+  MemoryStick,
+  Microchip,
   MonitorSmartphone,
   Network,
   Pencil,
-  RadioTower,
+  PlugZap,
+  Radio,
   RefreshCw,
   RotateCcw,
+  Route,
   Router,
   Search,
   Server,
+  ServerCog,
+  Share2,
   ShieldCheck,
   ShieldEllipsis,
+  ShipWheel,
   Smartphone,
+  Sparkles,
   SquareFunction,
   Trash2,
+  WavesHorizontal,
+  Waypoints,
   Webhook,
   Workflow,
   Zap,
@@ -65,10 +84,14 @@ import {
 import { useTranslation } from "react-i18next";
 import {
   ARCHITECTURE_DIAGRAM_SCHEMA_VERSION,
+  ARCHITECTURE_EDGE_LABEL_FONT_SIZE,
+  ARCHITECTURE_EDGE_LABEL_LINE_HEIGHT,
   DIAGRAM_SCHEMA_VERSION,
   diagramFallbackMarkdown,
   markdownToDoc,
   MIND_MAP_CONNECTOR_NAME,
+  MIND_MAP_EDGE_LABEL_FONT_SIZE,
+  MIND_MAP_EDGE_LABEL_LINE_HEIGHT,
   MIND_MAP_HORIZONTAL_GAP,
   mindMapTopicMarkup,
   MIND_MAP_VERTICAL_GAP,
@@ -86,18 +109,29 @@ import {
   resolveDiagramTheme,
   resolveFlowchartTheme,
   serializeDiagramDocument,
+  ARCHITECTURE_COMPONENT_SHAPES,
+  ARCHITECTURE_LABEL_FONT,
+  ARCHITECTURE_NODE_FONT_SIZE,
+  ARCHITECTURE_NODE_FONT_WEIGHT,
+  ARCHITECTURE_NODE_LINE_HEIGHT,
+  ARCHITECTURE_SHAPE_RESOURCE,
+  architectureEdgePorts,
   architectureEdgeVisual,
   architectureIconOffset,
   architectureNodeVisual,
   isArchitectureNodeShape,
   resolveArchitectureSurface,
   diagramReaderFocusNode,
+  FLOWCHART_EDGE_LABEL_FONT_SIZE,
+  FLOWCHART_EDGE_LABEL_LINE_HEIGHT,
   FLOWCHART_EDGE_ROUTER,
+  FLOWCHART_LABEL_FONT,
   flowchartEdgeIsStraight,
   flowchartEdgePorts,
   flowchartFitsReadableViewport,
   flowchartNodeVisual,
   resolveFlowchartSurface,
+  type ArchitectureComponentShape,
   type ArchitectureResourceIcon,
   type DiagramDocument,
   type DiagramEdgeKind,
@@ -117,7 +151,8 @@ import { ClipboardCopyNotice } from "@/components/ClipboardCopyNotice";
 import { DiagramToolbar, DiagramToolbarAddTrigger } from "@/components/DiagramToolbar";
 import { MemoEditorHeaderActions } from "@/components/MemoEditorHeaderActions";
 import { MemoEditorMetadataRow } from "@/components/MemoEditorMetadataRow";
-import { MemoEditorTopRowLeading } from "@/components/MemoEditorTopRowLeading";
+import { MemoEditorFocusModeButton, MemoEditorTopRowLeading, MemoEditorUpdatedLabel } from "@/components/MemoEditorTopRowLeading";
+import { MemoEditorToolbarDivider } from "@/components/MemoEditorToolbarChrome";
 import {
   MEMO_EDITOR_TITLE_REGION_CLASS_NAME,
   MEMO_EDITOR_TOP_ROW_CLASS_NAME,
@@ -233,10 +268,30 @@ const ARCHITECTURE_LIBRARY_CATEGORIES: Array<{
     tone: "text-emerald-600",
     items: [
       { shape: "service", icon: Server, labelKey: "diagram.architectureResources.service" },
-      { shape: "service", icon: Cpu, labelKey: "diagram.architectureResources.virtualMachine" },
+      { shape: "service", icon: Cpu, labelKey: "diagram.architectureResources.cpu" },
+      { shape: "service", icon: Gpu, labelKey: "diagram.architectureResources.gpu" },
+      { shape: "service", icon: MemoryStick, labelKey: "diagram.architectureResources.memory" },
+      { shape: "service", icon: ServerCog, labelKey: "diagram.architectureResources.virtualMachine" },
       { shape: "service", icon: Container, labelKey: "diagram.architectureResources.container" },
-      { shape: "service", icon: Blocks, labelKey: "diagram.architectureResources.kubernetes" },
+      { shape: "service", icon: ShipWheel, labelKey: "diagram.architectureResources.kubernetes" },
       { shape: "service", icon: SquareFunction, labelKey: "diagram.architectureResources.serverless" },
+    ],
+  },
+  {
+    id: "ai",
+    labelKey: "diagram.componentCategoryAi",
+    tone: "text-fuchsia-600",
+    items: [
+      { shape: "service", icon: BrainCircuit, labelKey: "diagram.architectureResources.largeLanguageModel" },
+      { shape: "service", icon: Sparkles, labelKey: "diagram.architectureResources.multimodalModel" },
+      { shape: "service", icon: Binary, labelKey: "diagram.architectureResources.embeddingModel" },
+      { shape: "service", icon: ArrowDownUp, labelKey: "diagram.architectureResources.reranker" },
+      { shape: "service", icon: Microchip, labelKey: "diagram.architectureResources.modelInference" },
+      { shape: "database", icon: Waypoints, labelKey: "diagram.architectureResources.vectorDatabase" },
+      { shape: "service", icon: Workflow, labelKey: "diagram.architectureResources.ragPipeline" },
+      { shape: "service", icon: Bot, labelKey: "diagram.architectureResources.aiAgent" },
+      { shape: "service", icon: Router, labelKey: "diagram.architectureResources.modelGateway" },
+      { shape: "service", icon: PlugZap, labelKey: "diagram.architectureResources.mcpServer" },
     ],
   },
   {
@@ -246,8 +301,8 @@ const ARCHITECTURE_LIBRARY_CATEGORIES: Array<{
     items: [
       { shape: "database", icon: Database, labelKey: "diagram.architectureResources.relationalDatabase" },
       { shape: "database", icon: DatabaseZap, labelKey: "diagram.architectureResources.noSqlDatabase" },
-      { shape: "database", icon: Layers3, labelKey: "diagram.architectureResources.cache" },
-      { shape: "database", icon: ChartNoAxesCombined, labelKey: "diagram.architectureResources.dataWarehouse" },
+      { shape: "database", icon: Zap, labelKey: "diagram.architectureResources.cache" },
+      { shape: "database", icon: Boxes, labelKey: "diagram.architectureResources.dataWarehouse" },
       { shape: "database", icon: Search, labelKey: "diagram.architectureResources.searchEngine" },
     ],
   },
@@ -260,7 +315,7 @@ const ARCHITECTURE_LIBRARY_CATEGORIES: Array<{
       { shape: "storage", icon: FileStack, labelKey: "diagram.architectureResources.fileStorage" },
       { shape: "storage", icon: HardDrive, labelKey: "diagram.architectureResources.blockStorage" },
       { shape: "storage", icon: FolderArchive, labelKey: "diagram.architectureResources.backup" },
-      { shape: "storage", icon: CloudUpload, labelKey: "diagram.architectureResources.cdn" },
+      { shape: "storage", icon: Radio, labelKey: "diagram.architectureResources.cdn" },
     ],
   },
   {
@@ -268,11 +323,11 @@ const ARCHITECTURE_LIBRARY_CATEGORIES: Array<{
     labelKey: "diagram.componentCategoryMiddleware",
     tone: "text-orange-600",
     items: [
-      { shape: "queue", icon: GitBranch, labelKey: "diagram.architectureResources.messageQueue" },
-      { shape: "queue", icon: Workflow, labelKey: "diagram.architectureResources.eventBus" },
-      { shape: "queue", icon: RadioTower, labelKey: "diagram.architectureResources.streamProcessing" },
+      { shape: "queue", icon: ListOrdered, labelKey: "diagram.architectureResources.messageQueue" },
+      { shape: "queue", icon: Share2, labelKey: "diagram.architectureResources.eventBus" },
+      { shape: "queue", icon: WavesHorizontal, labelKey: "diagram.architectureResources.streamProcessing" },
       { shape: "service", icon: Webhook, labelKey: "diagram.architectureResources.webhook" },
-      { shape: "service", icon: ListTree, labelKey: "diagram.architectureResources.serviceMesh" },
+      { shape: "service", icon: Grid2x2, labelKey: "diagram.architectureResources.serviceMesh" },
     ],
   },
   {
@@ -280,9 +335,9 @@ const ARCHITECTURE_LIBRARY_CATEGORIES: Array<{
     labelKey: "diagram.componentCategoryNetwork",
     tone: "text-blue-600",
     items: [
-      { shape: "service", icon: Router, labelKey: "diagram.architectureResources.apiGateway" },
-      { shape: "service", icon: Activity, labelKey: "diagram.architectureResources.loadBalancer" },
-      { shape: "external", icon: Globe2, labelKey: "diagram.architectureResources.dns" },
+      { shape: "service", icon: Route, labelKey: "diagram.architectureResources.apiGateway" },
+      { shape: "service", icon: GitFork, labelKey: "diagram.architectureResources.loadBalancer" },
+      { shape: "external", icon: Compass, labelKey: "diagram.architectureResources.dns" },
       { shape: "boundary", icon: Network, labelKey: "diagram.architectureResources.vpc" },
       { shape: "boundary", icon: Cable, labelKey: "diagram.architectureResources.subnet" },
       { shape: "security", icon: EthernetPort, labelKey: "diagram.architectureResources.vpn" },
@@ -319,8 +374,8 @@ const ARCHITECTURE_LIBRARY_CATEGORIES: Array<{
     tone: "text-slate-600",
     items: [
       { shape: "external", icon: CloudCog, labelKey: "diagram.architectureResources.saas" },
-      { shape: "external", icon: Webhook, labelKey: "diagram.architectureResources.externalApi" },
-      { shape: "external", icon: Zap, labelKey: "diagram.architectureResources.thirdPartyService" },
+      { shape: "external", icon: Braces, labelKey: "diagram.architectureResources.externalApi" },
+      { shape: "external", icon: ExternalLink, labelKey: "diagram.architectureResources.thirdPartyService" },
     ],
   },
 ];
@@ -330,12 +385,49 @@ const architectureResourceIcon = (item: ArchitectureLibraryItem) =>
 
 const ARCHITECTURE_LIBRARY_ITEMS = ARCHITECTURE_LIBRARY_CATEGORIES.flatMap((category) => category.items);
 
+const ARCHITECTURE_RESOURCE_ALIASES: Array<{
+  pattern: RegExp;
+  icon: ArchitectureResourceIcon;
+}> = [
+  { pattern: /\b(gpu|cuda|vram|graphics|显卡)\b|独立\s*gpu|gpu\s*核心|核显/i, icon: "gpu" },
+  { pattern: /\b(cpu|soc|processor|core)\b|cpu\s*核心|中央处理器|处理器/i, icon: "cpu" },
+  { pattern: /\b(memory|ram|vram|ddr|dram|unified\s*memory)\b|内存|统一内存|显存/i, icon: "memory" },
+  { pattern: /\b(k8s|kubernetes|kube)\b/i, icon: "kubernetes" },
+  { pattern: /\b(redis|memcached|cache)\b|缓存/i, icon: "cache" },
+  { pattern: /\b(kafka|rabbitmq|rocketmq|activemq|pulsar|sqs|queue|mq)\b|消息队列/i, icon: "messageQueue" },
+  { pattern: /\b(mysql|postgres|postgresql|oracle|sqlite|mariadb|db)\b|关系型数据库|数据库/i, icon: "relationalDatabase" },
+  { pattern: /\b(mongo|mongodb|dynamodb|cassandra|couchbase|nosql)\b/i, icon: "noSqlDatabase" },
+  { pattern: /\b(milvus|pinecone|qdrant|chroma|weaviate|vector)\b|向量/i, icon: "vectorDatabase" },
+  { pattern: /\b(kong|apisix|gateway|zuul)\b|网关|api\s*网关/i, icon: "apiGateway" },
+  { pattern: /\b(nginx|haproxy|alb|nlb|slb|load\s*balancer)\b|负载均衡/i, icon: "loadBalancer" },
+  { pattern: /\b(docker|container|pod)\b|容器/i, icon: "container" },
+  { pattern: /\b(llm|gpt|claude|gemini|deepseek|qwen|openai)\b|大模型|语言模型/i, icon: "largeLanguageModel" },
+  { pattern: /\b(agent)\b|智能体/i, icon: "aiAgent" },
+  { pattern: /\b(elasticsearch|es|opensearch|solr|meilisearch)\b|搜索/i, icon: "searchEngine" },
+  { pattern: /\b(cdn|cloudflare|akamai)\b/i, icon: "cdn" },
+  { pattern: /\b(dns|route53)\b/i, icon: "dns" },
+  { pattern: /\b(lambda|serverless|faas|function)\b|函数/i, icon: "serverless" },
+  { pattern: /\b(prometheus|grafana|datadog)\b|监控/i, icon: "monitoring" },
+  { pattern: /\b(loki|elk|fluentd|logstash)\b|日志/i, icon: "logging" },
+  { pattern: /\b(jaeger|zipkin|opentelemetry|otel|tracing)\b|链路追踪/i, icon: "tracing" },
+  { pattern: /\b(s3|oss|cos|minio|blob)\b|对象存储/i, icon: "objectStorage" },
+  { pattern: /\b(web|frontend|react|vue|angular|h5)\b|前端/i, icon: "webApp" },
+  { pattern: /\b(app|ios|android|mobile|flutter|react\s*native)\b|移动端/i, icon: "mobileApp" },
+  { pattern: /\b(service|microservice|backend|server)\b|服务|后端/i, icon: "service" },
+];
+
 const inferArchitectureResourceIcon = (
   label: string,
   t: (key: string) => string,
 ) => {
-  const item = ARCHITECTURE_LIBRARY_ITEMS.find((candidate) => t(candidate.labelKey) === label);
-  return item ? architectureResourceIcon(item) : undefined;
+  const trimmed = label.trim();
+  const directItem = ARCHITECTURE_LIBRARY_ITEMS.find((candidate) => (
+    t(candidate.labelKey).toLowerCase() === trimmed.toLowerCase()
+    || architectureResourceIcon(candidate).toLowerCase() === trimmed.toLowerCase()
+  ));
+  if (directItem) return architectureResourceIcon(directItem);
+  const aliasMatch = ARCHITECTURE_RESOURCE_ALIASES.find((entry) => entry.pattern.test(trimmed));
+  return aliasMatch ? aliasMatch.icon : undefined;
 };
 
 const isArchitectureLibraryDrag = (event: ReactDragEvent) => {
@@ -399,7 +491,7 @@ const ArchitectureComponentLibrary = ({
           {categories.length > 0 ? categories.map((category) => (
             <Collapsible key={category.id} defaultOpen>
               <DropdownMenuItem asChild onSelect={(event) => event.preventDefault()}>
-                <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-green)]">
+                <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/25">
                   <ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-data-[state=closed]:-rotate-90" />
                   {t(category.labelKey)}
                 </CollapsibleTrigger>
@@ -439,7 +531,7 @@ const ArchitectureComponentLibrary = ({
                         </TooltipTrigger>
                         <TooltipContent side="top" className="max-w-48">
                           <div>{label}</div>
-                          <div className="text-[11px] text-slate-300">{t("diagram.placeShapeHelp")}</div>
+                          <div className="text-xs text-slate-300">{t("diagram.placeShapeHelp")}</div>
                         </TooltipContent>
                       </Tooltip>
                     );
@@ -449,6 +541,119 @@ const ArchitectureComponentLibrary = ({
             </Collapsible>
           )) : (
             <div className="px-3 py-8 text-center text-sm text-slate-500">{t("diagram.noMatchingComponents")}</div>
+          )}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+const ArchitectureIconPicker = ({
+  currentIcon,
+  onSelectIcon,
+  t,
+}: {
+  currentIcon: ArchitectureResourceIcon;
+  onSelectIcon: (icon: ArchitectureResourceIcon) => void;
+  t: (key: string) => string;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const categories = ARCHITECTURE_LIBRARY_CATEGORIES.map((category) => ({
+    ...category,
+    items: category.items.filter((item) => t(item.labelKey).toLocaleLowerCase().includes(normalizedQuery)),
+  })).filter((category) => category.items.length > 0);
+
+  const CurrentLucide = ARCHITECTURE_LIBRARY_ITEMS.find(
+    (item) => architectureResourceIcon(item) === currentIcon,
+  )?.icon ?? Server;
+
+  return (
+    <DropdownMenu open={open} onOpenChange={(nextOpen) => {
+      setOpen(nextOpen);
+      if (!nextOpen) setQuery("");
+    }}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 shrink-0 rounded-md border-slate-200 bg-card p-0 text-slate-700 hover:bg-slate-50 focus-visible:ring-1 focus-visible:ring-slate-900/25"
+              aria-label={t("diagram.changeNodeIcon")}
+            >
+              <CurrentLucide className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          <div>{t("diagram.changeNodeIcon")}</div>
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent
+        align="start"
+        className="max-h-[min(28rem,calc(100vh-10rem))] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto p-0"
+      >
+        <div className="sticky top-0 z-10 border-b border-slate-200 bg-card p-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <Input
+              autoFocus
+              className="h-8 pl-8 text-xs"
+              value={query}
+              placeholder={t("diagram.componentSearch")}
+              aria-label={t("diagram.componentSearch")}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => event.stopPropagation()}
+            />
+          </div>
+        </div>
+        <div className="p-1.5">
+          {categories.length > 0 ? categories.map((category) => (
+            <Collapsible key={category.id} defaultOpen>
+              <DropdownMenuItem asChild onSelect={(event) => event.preventDefault()}>
+                <CollapsibleTrigger className="group flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-900/25">
+                  <ChevronDown className="h-3.5 w-3.5 text-slate-400 transition-transform group-data-[state=closed]:-rotate-90" />
+                  {t(category.labelKey)}
+                </CollapsibleTrigger>
+              </DropdownMenuItem>
+              <CollapsibleContent>
+                <div className="grid grid-cols-6 gap-1 px-1 pb-1.5">
+                  {category.items.map((item) => {
+                    const Icon = item.icon;
+                    const resIcon = architectureResourceIcon(item);
+                    const label = t(item.labelKey);
+                    const isSelected = resIcon === currentIcon;
+                    return (
+                      <Tooltip key={item.labelKey}>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuItem
+                            aria-label={label}
+                            className={cn(
+                              "flex h-9 w-9 cursor-pointer justify-center rounded-lg p-0 hover:bg-current/10 focus:bg-current/10",
+                              category.tone,
+                              isSelected && "ring-2 ring-current font-bold",
+                            )}
+                            onSelect={() => {
+                              onSelectIcon(resIcon);
+                              setOpen(false);
+                            }}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </DropdownMenuItem>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          <div>{label}</div>
+                        </TooltipContent>
+                      </Tooltip>
+                    );
+                  })}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )) : (
+            <div className="px-3 py-6 text-center text-xs text-slate-500">{t("diagram.noMatchingComponents")}</div>
           )}
         </div>
       </DropdownMenuContent>
@@ -563,7 +768,18 @@ const applyDiagramSurface = (
   kind?: DiagramDocument["kind"],
 ) => {
   graph.drawBackground({ color: diagramCanvasColor(kind ?? "mind-map", theme, appearance) });
-  graph.clearGrid();
+  if (kind === "architecture" || kind === "flowchart") {
+    graph.drawGrid({
+      type: "dot",
+      args: {
+        color: appearance === "dark" ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.08)",
+        thickness: 1.2,
+      },
+    });
+    graph.showGrid();
+  } else {
+    graph.clearGrid();
+  }
 };
 
 const prepareExportSvg = (background: string) => (svg: SVGSVGElement) => {
@@ -755,6 +971,11 @@ const suspendScrollerAutoResize = (
     if (!isCurrent()) return;
     scroller.enableAutoResize();
     scroller.updateScroller();
+    // Scroller.update() can retain the pre-insert paper size even though the
+    // model already contains the new cell. Refit from model geometry before
+    // restoring the viewport anchor so the new node and the existing diagram
+    // cannot be clipped until the editor is reloaded.
+    ensureDiagramPaperContainsNodes(graph);
     if (!restoreAnchor || !anchorView || !anchorBefore) return;
     const keepAnchor = () => {
       if (!isCurrent() || !anchorView || !anchorBefore) return;
@@ -871,10 +1092,10 @@ const diagramNodePresentation = (
     ? compactArchitectureNodeSize(node.shape, node)
     : compactFlowchartNodeSize(node.shape);
   if (node.shape === "boundary") return { ...size, text: node.label };
-  const fontSize = 13;
-  const lineHeight = 18;
+  const fontSize = kind === "architecture" ? ARCHITECTURE_NODE_FONT_SIZE : 13;
+  const lineHeight = kind === "architecture" ? ARCHITECTURE_NODE_LINE_HEIGHT : 18;
   const text = Dom.breakText(node.label, { width: size.width - (kind === "architecture" ? 66 : 24), height: 10000 }, {
-    fontSize, 'font-size': fontSize, 'font-weight': kind === "architecture" ? 600 : !node.parentId ? 650 : 500,
+    fontSize, 'font-size': fontSize, 'font-weight': kind === "architecture" ? ARCHITECTURE_NODE_FONT_WEIGHT : !node.parentId ? 650 : 500,
     lineHeight,
   });
   return { ...size, height: Math.max(size.height, text.split("\n").length * lineHeight + 16), text };
@@ -1012,16 +1233,85 @@ const diagramEdgeLabel = (
   kind: DiagramDocument["kind"],
   appearance: DiagramAppearance = "light",
   theme?: DiagramTheme,
+  edgeKind?: DiagramEdgeKind,
 ) => {
-  const flowchart = kind === "flowchart" ? resolveFlowchartSurface(appearance, theme) : null;
-  const architecture = kind === "architecture" ? resolveArchitectureSurface(appearance) : null;
+  if (kind === "architecture") {
+    const edgePaint = edgeKind ? resolveArchitectureSurface(appearance).edges[edgeKind] : undefined;
+    return {
+      position: { distance: 0.5, offset: { x: 0, y: -14 } },
+      attrs: {
+        label: {
+          text,
+          fill: appearance === "dark" ? "#E2E8F0" : "#334155",
+          fontSize: ARCHITECTURE_EDGE_LABEL_FONT_SIZE,
+          fontWeight: 500,
+          fontFamily: ARCHITECTURE_LABEL_FONT,
+          lineHeight: ARCHITECTURE_EDGE_LABEL_LINE_HEIGHT,
+          textWrap: { width: 140, height: 512 },
+        },
+        body: {
+          ref: "label",
+          refWidth: 1,
+          refHeight: 1,
+          refWidth2: 14,
+          refHeight2: 6,
+          refX: -7,
+          refY: -3,
+          fill: appearance === "dark" ? "rgba(15, 23, 42, 0.92)" : "rgba(255, 255, 255, 0.96)",
+          stroke: edgePaint?.stroke ?? (appearance === "dark" ? "rgba(148, 163, 184, 0.3)" : "rgba(203, 213, 225, 0.8)"),
+          strokeWidth: 1,
+          rx: 6,
+          ry: 6,
+          style: { filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.05))" },
+        },
+      },
+    };
+  }
+  if (kind === "flowchart") {
+    return {
+      position: { distance: 0.5, offset: 0 },
+      attrs: {
+        label: {
+          text,
+          fill: appearance === "dark" ? "#E2E8F0" : "#475569",
+          fontSize: FLOWCHART_EDGE_LABEL_FONT_SIZE,
+          fontWeight: 500,
+          fontFamily: FLOWCHART_LABEL_FONT,
+          lineHeight: FLOWCHART_EDGE_LABEL_LINE_HEIGHT,
+          textWrap: { width: 140, height: 512 },
+        },
+        body: {
+          ref: "label",
+          refWidth: 1,
+          refHeight: 1,
+          refWidth2: 14,
+          refHeight2: 6,
+          refX: -7,
+          refY: -3,
+          fill: appearance === "dark" ? "rgba(24, 28, 34, 0.94)" : "rgba(255, 255, 255, 0.95)",
+          stroke: appearance === "dark" ? "rgba(148, 163, 184, 0.28)" : "rgba(100, 116, 139, 0.24)",
+          strokeWidth: 1,
+          rx: 6,
+          ry: 6,
+          style: { filter: "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.06))" },
+        },
+      },
+    };
+  }
+  const flowchart = null;
   return {
-    position: { distance: 0.5, offset: kind === "architecture" ? { x: 0, y: -16 } : 0 },
+    position: { distance: 0.5, offset: 0 },
     attrs: {
-      label: { text, fill: flowchart?.process.text ?? architecture?.nodes.service.text ?? palette.nodeText, fontSize: 12, lineHeight: 16, textWrap: { width: 140, height: 512 } },
+      label: {
+        text,
+        fill: palette.nodeText,
+        fontSize: MIND_MAP_EDGE_LABEL_FONT_SIZE,
+        lineHeight: MIND_MAP_EDGE_LABEL_LINE_HEIGHT,
+        textWrap: { width: 140, height: 512 },
+      },
       body: { ref: "label", refWidth: 1, refHeight: 1, refWidth2: 12, refHeight2: 8, refX: -6, refY: -4,
-        fill: flowchart?.canvas ?? architecture?.canvas ?? palette.canvas,
-        stroke: flowchart?.process.stroke ?? architecture?.nodes.service.stroke ?? palette.nodeStroke, strokeWidth: 1, rx: 4, ry: 4 },
+        fill: palette.canvas,
+        stroke: palette.nodeStroke, strokeWidth: 1, rx: 4, ry: 4 },
     },
   };
 };
@@ -1058,23 +1348,25 @@ const edgeMetadata = (
         strokeDasharray: architectureEdge?.strokeDasharray,
         sourceMarker: architectureEdge
           ? architectureEdge.sourceMarker
-          : edge.bidirectional ? { name: "block", width: 8, height: 6 } : null,
-        targetMarker: kind === "mind-map" ? null : architectureEdge?.targetMarker ?? { name: "block", width: 8, height: 6 },
+          : edge.bidirectional ? { name: "block", width: 7, height: 5 } : null,
+        targetMarker: kind === "mind-map" ? null : architectureEdge?.targetMarker ?? { name: "block", width: 7, height: 5 },
         ...(mindLine ?? { fill: "none" }),
       },
     },
-    labels: edge.label ? [diagramEdgeLabel(edge.label, palette, kind, appearance, theme)] : undefined,
+    labels: edge.label ? [diagramEdgeLabel(edge.label, palette, kind, appearance, theme, edgeKind)] : undefined,
   };
 };
 
-const applyFlowchartEdgePorts = (graph: Graph) => {
+const applyOrthogonalEdgePorts = (graph: Graph, kind: DiagramDocument["kind"]) => {
   for (const edge of graph.getEdges()) {
     const source = edge.getSourceNode();
     const target = edge.getTargetNode();
     if (!source || !target) continue;
     const sourceBox = { ...source.getPosition(), ...source.getSize() };
     const targetBox = { ...target.getPosition(), ...target.getSize() };
-    const ports = flowchartEdgePorts(sourceBox, targetBox);
+    const ports = kind === "architecture"
+      ? architectureEdgePorts(sourceBox, targetBox)
+      : flowchartEdgePorts(sourceBox, targetBox);
     edge.setSource({ cell: source.id, port: ports.source });
     edge.setTarget({ cell: target.id, port: ports.target });
     edge.setRouter(flowchartEdgeIsStraight(sourceBox, targetBox) ? { name: "normal" } : FLOWCHART_EDGE_ROUTER);
@@ -1316,7 +1608,7 @@ const applyGraphPalette = (
       }
       if (kind !== "mind-map") edge.attr("line/fill", "none");
       if (edge.getLabels().length > 0) {
-        edge.setLabels(edge.getLabels().map((label) => diagramEdgeLabel(String(label.attrs?.label?.text ?? ""), palette, kind, appearance, theme)));
+        edge.setLabels(edge.getLabels().map((label) => diagramEdgeLabel(String(label.attrs?.label?.text ?? ""), palette, kind, appearance, theme, edgeKind)));
       }
     }
     if (kind === "mind-map") applyMindMapHierarchy(graph, theme, appearance, structure);
@@ -1599,8 +1891,15 @@ export const DiagramEditorPane = ({
       container: containerRef.current,
       autoResize: true,
       async: true,
-      background: { color: diagramCanvasColor(document.kind, documentTheme, appearance) },
-      grid: false,
+      grid: document.kind === "architecture" ? {
+        size: 20,
+        visible: true,
+        type: "dot",
+        args: {
+          color: appearance === "dark" ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.08)",
+          thickness: 1.2,
+        },
+      } : false,
       panning: false,
       mousewheel: { enabled: true, modifiers: ["ctrl", "meta"], minScale: DIAGRAM_ZOOM_SCALE_MIN, maxScale: DIAGRAM_ZOOM_SCALE_MAX },
       interacting: () => !readOnly && !spacePanActiveRef.current,
@@ -1682,7 +1981,7 @@ export const DiagramEditorPane = ({
       }
     }
     graph.addEdges(document.edges.map((edge) => edgeMetadata(edge, document.kind, documentTheme, appearance, documentStructure)));
-    if (usesOrthogonalDiagramEdges(document.kind)) applyFlowchartEdgePorts(graph);
+    if (usesOrthogonalDiagramEdges(document.kind)) applyOrthogonalEdgePorts(graph, document.kind);
     applyGraphPalette(graph, documentTheme, document.kind, appearance, documentStructure);
     graph.on("scale", () => setZoomPercent(Math.round(graph.scale().sx * 100)));
     graph.cleanHistory();
@@ -1874,7 +2173,7 @@ export const DiagramEditorPane = ({
           target: { cell: currentCell.id, ...(currentPort ? { port: currentPort } : {}) },
         });
         graph.stopBatch("connect");
-        if (usesOrthogonalDiagramEdges(document.kind)) applyFlowchartEdgePorts(graph);
+        if (usesOrthogonalDiagramEdges(document.kind)) applyOrthogonalEdgePorts(graph, document.kind);
         return;
       }
       if (!currentPoint || !containerRef.current) {
@@ -2323,8 +2622,41 @@ export const DiagramEditorPane = ({
     setSelectedNodeLabel(label);
     const node = selectedNodeId ? graphRef.current?.getCellById(selectedNodeId) : null;
     if (!node?.isNode() || readOnly) return;
-    node.setData({ ...node.getData<NodeData>(), label });
+    const data = node.getData<NodeData>();
+    const isArchitecture = document?.kind === "architecture";
+    let nextResourceIcon = data?.resourceIcon;
+    if (isArchitecture) {
+      const inferred = inferArchitectureResourceIcon(label, t);
+      if (inferred && inferred !== data?.resourceIcon) {
+        nextResourceIcon = inferred;
+      }
+    }
+    node.setData({ ...data, label, ...(nextResourceIcon ? { resourceIcon: nextResourceIcon } : {}) });
     refreshNodeLabel(node, label);
+    if (isArchitecture && nextResourceIcon && nextResourceIcon !== data?.resourceIcon) {
+      const shape = data?.shape ?? "service";
+      const visual = architectureNodeVisual(shape, appearanceRef.current, node.getSize(), nextResourceIcon);
+      node.setMarkup(visual.markup);
+      node.replaceAttrs({
+        body: visual.body,
+        label: { ...visual.label, text: label },
+        ...visual.attrs,
+      });
+    }
+  };
+
+  const updateSelectedResourceIcon = (resourceIcon: ArchitectureResourceIcon) => {
+    const node = selectedNodeId ? graphRef.current?.getCellById(selectedNodeId) : null;
+    if (!node?.isNode() || readOnly || document?.kind !== "architecture") return;
+    const data = node.getData<NodeData>() ?? { label: "", shape: "service" };
+    node.setData({ ...data, resourceIcon });
+    const visual = architectureNodeVisual(data.shape, appearanceRef.current, node.getSize(), resourceIcon);
+    node.setMarkup(visual.markup);
+    node.replaceAttrs({
+      body: visual.body,
+      label: { ...visual.label, text: node.attr("label/text") ?? data.label },
+      ...visual.attrs,
+    });
   };
 
   const updateSelectedEdgeLabel = (label: string) => {
@@ -2336,7 +2668,8 @@ export const DiagramEditorPane = ({
       return;
     }
     const palette = resolveDiagramPalette(themeRef.current, appearanceRef.current);
-    edge.setLabels([diagramEdgeLabel(label, palette, document?.kind ?? "flowchart", appearanceRef.current, themeRef.current)]);
+    const edgeKind = edge.getData<EdgeData>()?.kind;
+    edge.setLabels([diagramEdgeLabel(label, palette, document?.kind ?? "flowchart", appearanceRef.current, themeRef.current, edgeKind)]);
   };
 
   const createConnectedFlowNode = (shape: DiagramNodeShape) => {
@@ -2381,7 +2714,7 @@ export const DiagramEditorPane = ({
       target: { cell: id, ...(oppositeFlowPort(pending.sourcePort) ? { port: oppositeFlowPort(pending.sourcePort) } : {}) },
     });
     graph.stopBatch("quick-create");
-    applyFlowchartEdgePorts(graph);
+    applyOrthogonalEdgePorts(graph, document.kind);
     settleScroller();
     graph.cleanSelection();
     graph.select(node);
@@ -2460,7 +2793,7 @@ export const DiagramEditorPane = ({
         node.resize(geometry.width, geometry.height);
       }
     }
-    if (usesOrthogonalDiagramEdges(document.kind)) applyFlowchartEdgePorts(graph);
+    if (usesOrthogonalDiagramEdges(document.kind)) applyOrthogonalEdgePorts(graph, document.kind);
     if (document.kind === "mind-map") applyMindMapHierarchy(graph, themeRef.current, appearanceRef.current, structureRef.current);
     graph.stopBatch("layout");
     ensureDiagramPaperContainsNodes(graph);
@@ -2709,7 +3042,7 @@ export const DiagramEditorPane = ({
     ? "bg-rose-50 text-rose-700"
     : saveStatus === "saved"
       ? "bg-slate-100 text-slate-500"
-      : "bg-emerald-50 text-emerald-700";
+      : "bg-slate-100 text-slate-700";
 
   return (
     <TooltipProvider>
@@ -2717,9 +3050,6 @@ export const DiagramEditorPane = ({
       <header className="shrink-0 border-b border-slate-200 bg-card">
         <div className={MEMO_EDITOR_TOP_ROW_CLASS_NAME}>
           <MemoEditorTopRowLeading
-            desktopFocusMode={desktopFocusMode}
-            updatedLabel={updatedLabel}
-            onToggleDesktopFocusMode={onToggleDesktopFocusMode}
             mobileBackButton={(
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -2730,13 +3060,35 @@ export const DiagramEditorPane = ({
                 <TooltipContent>{t("diagram.back")}</TooltipContent>
               </Tooltip>
             )}
+            titleInput={(
+              <MemoTitleInput
+                value={title}
+                readOnly={readOnly}
+                placeholder={kindLabel}
+                ariaLabel={t("diagram.title")}
+                onValueChange={(nextTitle) => {
+                  titleRef.current = nextTitle;
+                  setTitle(nextTitle);
+                  setDirtyVersion((current) => current + 1);
+                  const graph = graphRef.current;
+                  if (graph) {
+                    setDirty(savedSnapshotRef.current !== diagramEditorSnapshot(
+                      nextTitle,
+                      graphToDocument(graph, document.kind, themeRef.current, structureRef.current),
+                    ));
+                  }
+                }}
+              />
+            )}
           />
 
           <div className="flex shrink-0 items-center gap-1">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <MemoEditorUpdatedLabel updatedLabel={updatedLabel} />
             <m.span
               key={`mobile-${saveStatus}`}
               className={cn(
-              "inline-flex max-w-[5.5rem] truncate rounded-full px-2 py-1 text-[11px] font-medium sm:hidden",
+              "inline-flex max-w-[5.5rem] truncate rounded-full px-2 py-1 text-xs font-medium sm:hidden",
               saveStatusClassName,
             )}
               role="status"
@@ -2749,7 +3101,7 @@ export const DiagramEditorPane = ({
             <m.span
               key={saveStatus}
               className={cn(
-              "hidden items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium sm:inline-flex",
+              "hidden items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium sm:inline-flex",
               saveStatusClassName,
             )}
               role="status"
@@ -2768,6 +3120,13 @@ export const DiagramEditorPane = ({
               )}
               {saveLabel}
             </m.span>
+            </div>
+            <MemoEditorToolbarDivider className="mx-0.5 hidden h-4 sm:block" />
+            <div className="flex items-center gap-0.5">
+            <MemoEditorFocusModeButton
+              desktopFocusMode={desktopFocusMode}
+              onToggleDesktopFocusMode={onToggleDesktopFocusMode}
+            />
             {!readOnly && saveFailed && (
               <Button variant="soft" size="sm" disabled={saving || !editSessionReady} onClick={() => void save()}>
                 <RefreshCw className="h-4 w-4" />
@@ -2830,30 +3189,11 @@ export const DiagramEditorPane = ({
                 </>
               )}
             />
+            </div>
           </div>
         </div>
 
         <div className={MEMO_EDITOR_TITLE_REGION_CLASS_NAME}>
-          <div className="min-w-0">
-            <MemoTitleInput
-              value={title}
-              readOnly={readOnly}
-              placeholder={kindLabel}
-              ariaLabel={t("diagram.title")}
-              onValueChange={(nextTitle) => {
-                titleRef.current = nextTitle;
-                setTitle(nextTitle);
-                setDirtyVersion((current) => current + 1);
-                const graph = graphRef.current;
-                if (graph) {
-                  setDirty(savedSnapshotRef.current !== diagramEditorSnapshot(
-                    nextTitle,
-                    graphToDocument(graph, document.kind, themeRef.current, structureRef.current),
-                  ));
-                }
-              }}
-            />
-          </div>
           <MemoEditorMetadataRow
             contentMarkdown={memo.contentMarkdown}
             disabled={readOnly}
@@ -2954,12 +3294,30 @@ export const DiagramEditorPane = ({
           readOnly={readOnly}
           selectionEditor={(
             <>
-              {selectedNodeId && !readOnly && (
-                <div className="ml-auto flex min-w-[220px] flex-1 items-center gap-2 sm:max-w-sm">
-                  <span className="shrink-0 text-xs font-medium text-slate-500">{t("diagram.nodeText")}</span>
-                  <Input value={selectedNodeLabel} maxLength={120} onChange={(event) => updateSelectedLabel(event.target.value)} />
-                </div>
-              )}
+              {selectedNodeId && !readOnly && (() => {
+                const selectedNode = graphRef.current?.getCellById(selectedNodeId);
+                const selectedData = selectedNode?.isNode() ? selectedNode.getData<NodeData>() : undefined;
+                const isArchitecture = document?.kind === "architecture";
+                const isArchitectureComponent = isArchitecture && selectedData?.shape !== "boundary";
+                const selectedIcon: ArchitectureResourceIcon = selectedData?.resourceIcon
+                  ?? (selectedData?.shape && ARCHITECTURE_COMPONENT_SHAPES.includes(selectedData.shape as ArchitectureComponentShape)
+                    ? ARCHITECTURE_SHAPE_RESOURCE[selectedData.shape as ArchitectureComponentShape]
+                    : "service");
+
+                return (
+                  <div className="ml-auto flex min-w-[220px] flex-1 items-center gap-2 sm:max-w-sm">
+                    {isArchitectureComponent && (
+                      <ArchitectureIconPicker
+                        currentIcon={selectedIcon}
+                        onSelectIcon={updateSelectedResourceIcon}
+                        t={t}
+                      />
+                    )}
+                    <span className="shrink-0 text-xs font-medium text-slate-500">{t("diagram.nodeText")}</span>
+                    <Input value={selectedNodeLabel} maxLength={120} onChange={(event) => updateSelectedLabel(event.target.value)} />
+                  </div>
+                );
+              })()}
               {selectedEdgeId && !readOnly && (
                 <div className="ml-auto flex min-w-[220px] flex-1 items-center gap-2 sm:max-w-sm">
                   <span className="shrink-0 text-xs font-medium text-slate-500">{t("diagram.edgeText")}</span>
@@ -2997,9 +3355,9 @@ export const DiagramEditorPane = ({
             >
               <span>{t("diagram.navHintPan")}</span>
               <span className="text-slate-300 dark:text-slate-600">·</span>
-              <span className={cn("inline-flex items-center transition-colors duration-150", shiftSelectActive && "font-medium text-emerald-600 dark:text-emerald-400")}>
+              <span className={cn("inline-flex items-center transition-colors duration-150", shiftSelectActive && "font-medium text-slate-950")}>
                 <span className="mr-1">{t("diagram.navHintHoldShift")}</span>
-                <kbd className={cn("mr-1 inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold transition-colors duration-150", shiftSelectActive ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300")}>
+                <kbd className={cn("mr-1 inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-semibold transition-colors duration-150", shiftSelectActive ? "border-slate-400 bg-slate-100 text-slate-950" : "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300")}>
                   Shift
                 </kbd>
                 <span>{t("diagram.navHintBoxSelect")}</span>
@@ -3034,22 +3392,22 @@ export const DiagramEditorPane = ({
               <div className="whitespace-nowrap px-1.5 pb-1.5 text-xs font-medium text-slate-500">{t("diagram.quickCreateTitle")}</div>
               <div className="grid grid-cols-3 gap-1">
                 <Button autoFocus className="relative h-16 min-w-0 flex-col gap-1 whitespace-nowrap px-2 text-xs" variant="ghost" aria-label={t("diagram.addStep")} onClick={() => createConnectedFlowNode("process")}>
-                  <kbd className="absolute right-1.5 top-1 text-[10px] font-normal text-slate-400">1</kbd>
+                  <kbd className="absolute right-1.5 top-1 text-xs font-normal text-slate-400">1</kbd>
                   <Box className="h-6 w-6" />
                   {t("diagram.addStep")}
                 </Button>
                 <Button className="relative h-16 min-w-0 flex-col gap-1 whitespace-nowrap px-2 text-xs" variant="ghost" aria-label={t("diagram.addDecision")} onClick={() => createConnectedFlowNode("decision")}>
-                  <kbd className="absolute right-1.5 top-1 text-[10px] font-normal text-slate-400">2</kbd>
+                  <kbd className="absolute right-1.5 top-1 text-xs font-normal text-slate-400">2</kbd>
                   <Diamond className="h-6 w-6" />
                   {t("diagram.addDecision")}
                 </Button>
                 <Button className="relative h-16 min-w-0 flex-col gap-1 whitespace-nowrap px-2 text-xs" variant="ghost" aria-label={t("diagram.addTerminator")} onClick={() => createConnectedFlowNode("terminator")}>
-                  <kbd className="absolute right-1.5 top-1 text-[10px] font-normal text-slate-400">3</kbd>
+                  <kbd className="absolute right-1.5 top-1 text-xs font-normal text-slate-400">3</kbd>
                   <Circle className="h-6 w-6" />
                   {t("diagram.addTerminator")}
                 </Button>
               </div>
-              <div className="whitespace-nowrap px-1.5 pt-1 text-[11px] text-slate-400">{t("diagram.quickCreateShortcuts")}</div>
+              <div className="whitespace-nowrap px-1.5 pt-1 text-xs text-slate-400">{t("diagram.quickCreateShortcuts")}</div>
             </div>
           ) : null}
           {nodeEditor ? (

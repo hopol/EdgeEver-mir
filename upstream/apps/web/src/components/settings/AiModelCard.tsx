@@ -136,7 +136,7 @@ export const AiModelCard = () => {
         <CollapsibleContent asChild>
           <CardContent className="grid gap-5 p-4 pt-0 sm:px-5 sm:pb-5">
             {settingsQuery.isLoading ? (
-              <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />{t("common.loading")}</p>
+              <p className="flex items-center gap-2 text-xs leading-5 text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />{t("common.loading")}</p>
             ) : (
               <>
                 {!encryptionConfigured ? (
@@ -193,7 +193,7 @@ export const AiModelCard = () => {
                       <span className="text-xs font-semibold text-slate-500">
                         {t("aiModel.servicesTitle")}
                       </span>
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                         {settings?.providers.length ?? 0}
                       </span>
                     </div>
@@ -223,7 +223,7 @@ export const AiModelCard = () => {
                 </section>
 
                 <div className="flex items-start gap-2 border-t border-slate-200/60 pt-3 ">
-                  <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 " />
+                  <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-900" />
                   <p className="text-xs leading-relaxed text-slate-500 ">
                     {t("aiModel.privacyNotice")}
                   </p>
@@ -297,7 +297,7 @@ export const AiModelCard = () => {
 };
 
 const Field = ({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) => (
-  <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+  <label className="grid gap-1.5 text-xs font-normal leading-5 text-slate-700">
     {label}{children}{hint ? <span className="text-xs font-normal leading-4 text-slate-500">{hint}</span> : null}
   </label>
 );

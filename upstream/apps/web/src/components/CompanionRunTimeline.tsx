@@ -37,8 +37,8 @@ function CompanionToolList({
         <ul className="space-y-1">
           {todos.map(todo => (
             <li key={todo.id} className="flex items-start gap-1.5 text-xs text-slate-700">
-              {todo.status === "completed" ? <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" /> : todo.status === "in_progress"
-                ? <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-emerald-600" />
+              {todo.status === "completed" ? <Check className="mt-0.5 h-3 w-3 shrink-0 text-slate-950" /> : todo.status === "in_progress"
+                ? <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-slate-500" />
                 : <Circle className="mt-0.5 h-3 w-3 shrink-0 text-slate-400" />}
               <span className={todo.status === "completed" ? "text-slate-500 line-through" : ""}>{todo.content}</span>
             </li>
@@ -58,19 +58,19 @@ function CompanionToolList({
                 const key = `${tool.id}-${effect.memoId}-${index}`;
                 return (
                   <div key={key} className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 pl-0.5">
-                    <button type="button" disabled={busy} className="inline-flex max-w-full items-center gap-1 font-medium hover:text-emerald-600 hover:underline"
+                    <button type="button" disabled={busy} className="inline-flex max-w-full items-center gap-1 font-medium hover:text-slate-950 hover:underline"
                       onClick={() => onOpenNote(effect.memoId!, effect.notebookId || "")}>
                       <FileText className="h-3 w-3 shrink-0 text-slate-400" />
                       <span className="truncate">{effect.title || t("common.untitledMemo")}</span>
                     </button>
                     {effect.kind === "trashed" ? (
-                      <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-[11px]" disabled={busy || pending === key}
+                      <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-xs" disabled={busy || pending === key}
                         onClick={() => void restore(effect, key)}>
                         <RotateCcw className="h-3 w-3" />{t("companion.timeline.restore")}
                       </Button>
                     ) : null}
                     {effect.kind === "updated" && effect.previousRevision != null ? (
-                      <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-[11px]" disabled={busy || pending === key}
+                      <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-xs" disabled={busy || pending === key}
                         onClick={() => void restore(effect, key)}>
                         <Undo2 className="h-3 w-3" />{t("companion.timeline.restoreRevision")}
                       </Button>
@@ -82,7 +82,7 @@ function CompanionToolList({
           ))}
         </ul>
       ) : null}
-      {message ? <p className="text-[11px] text-slate-500">{message}</p> : null}
+      {message ? <p className="text-xs text-slate-500">{message}</p> : null}
     </div>
   );
 }
@@ -105,7 +105,7 @@ export function CompanionRunTimeline({
     <div className="rounded-md border border-slate-200/80 bg-slate-50/70">
       <button
         type="button"
-        className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] font-medium text-slate-500"
+        className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-xs font-medium text-slate-500"
         aria-expanded={open}
         onClick={() => setOpen(value => !value)}
       >

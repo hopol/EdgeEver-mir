@@ -38,6 +38,7 @@ EdgeEver は、オープンソースのノートと知識ベースの作業領�
 * **Evernote**：広告と余分な機能で重くなり、書き出しが煩雑で、無料枠は狭く、AI / MCP は有料プランです。
 * **Obsidian**：ファイルは開いていますが、コアはクローズドです。公式同期は有料、第三者同期は手間がかかります。フラットなローカルファイル走査に依存するため、ノートが数千・数万件に増えたりプラグインを重ねると起動や検索がもたつきます。画像と添付をノートと一緒に置くと保管庫が膨らみ、モバイル同期が遅く、削除後に添付が残りやすいです。気軽な取り込みには重いことがあります。
 * **Memos などのタイムライン型**：簡潔ですが、三ペインの整理作業とはレイアウトが違います。
+* **思源ノート（SiYuan）などのブロック型知識ベース**：高機能でオープンソースのセルフホストに対応していますが、徹底した「ブロック（Block）」構造により日常的な気軽なメモや流れるような文章作成には心理的負荷がやや高くなります。また、サーバー費用ゼロの Serverless 運用形態がなく、マルチデバイス同期は公式の有料サブスクリプション、または S3/WebDAV 同期機能を有料でアンロックして自前ストレージを用意する必要があります。
 
 **EdgeEver はその隙間を埋めます。** 同期と自前運用を含めてスタック全体がオープンソースです。使い慣れた三ペインを残し、1万件のノートを抱えて常駐しても軽快でなめらか、ネイティブな AI Agent と無料で始められる導入もあります。
 
@@ -67,7 +68,7 @@ EdgeEver は、オープンソースのノートと知識ベースの作業領�
 - **導入方法を選べる**：Cloudflare の無料 Serverless、または VPS / NAS / 自宅サーバーの Docker。Cloudflare の無料保存の目安では、個人なら短いノート約 15 万、画像約 5 万。Docker の保存は必要に応じて伸ばせ、ノート数百万件と大きな画像庫にも足ります。
 - **開かれたデータ、囲い込みなし**：標準 SQLite、REST API、MCP、CLI。知識は透明に保存され、特定アプリに縛られません。
 - **欠損のない ZIP バックアップ**：Markdown、Front Matter、入れ子フォルダ、相対パスの添付、版履歴をまとめて書き出し、どこでも復元できます。
-- **ネイティブな AI Agent 連携**：MCP で Claude Code、Codex、Antigravity などがノートを読み、整理し、要約できます。Notion や Feishu Bitable ともつなぎます。
+- **ネイティブな AI Agent 連携**：MCP で Claude Code、Codex、Antigravity、WorkBuddy などの AI Agent がノートを読み、整理し、要約できます。Notion や Feishu Bitable ともつなぎます。
 - **自分の AI モデル**：OpenAI、Anthropic、Gemini 互換と第三者リレーを接続し、全文または選択範囲の要約、要点抽出、校正、翻訳、続きの執筆ができます。
 - **プラグイン API**： [Plugin API](docs/plugin-development.md) で拡張できます。
 - **台数制限のない同期**：商用の端末数上限はありません。Web、PWA、ブラウザ経由で PC、タブレット、モバイルを同期します。
@@ -98,19 +99,23 @@ Cloudflare のオンライン導入は、次のいずれかです。
 
 ### 方法 A: AI Agent で導入（推奨）
 
-次のプロンプトを AI Agent（Codex、Claude、Cursor、workbuddy、Antigravity、OpenClaw、Hermes Agent など）へそのまま送ってください。実行中に GitHub や Cloudflare へのアクセスが求められたら、権限を確認して認可してください。
+次のプロンプトを AI Agent（Codex、Claude、Cursor、WorkBuddy、Antigravity、OpenClaw、Hermes Agent など）へそのまま送ってください。実行中に GitHub や Cloudflare へのアクセスが求められたら、権限を確認して認可してください。
 
 ```text
-EdgeEver をオンラインで導入してください:
+GitHub と Cloudflare のオンライン操作だけで EdgeEver を導入してください:
 1. Fork https://github.com/tianma-if/edgeever.
 2. Cloudflare で D1 `edgeever` と R2 `edgeever-resources` を作成します。
-3. その Fork を Cloudflare Workers & Pages に取り込み、`main` を本番ブランチにします。
-4. Worker Secret `EDGE_EVER_AUTH_PASSWORD` を追加し、ユーザーが選んだパスワードを値にします。
-   このインスタンス専用の、32 文字以上の強いパスワードを推奨します。
-5. 初回ビルドを開始し、`/api/health` と `/api/openapi.json` を確認してから、
-   ユーザー名 `admin` と設定したパスワードでログインできることを確認します。
+3. Workers & Pages で Fork の `main` ブランチから `edgeever` という名前の Worker を作成します。
+   リポジトリのルートを使い、Cloudflare Workers Builds の既定のデプロイコマンドを維持します。
+   その API トークンに D1 の読み取り・編集権限があることを確認して Save and Deploy を選択します。
+4. Worker の作成後、ユーザーが指定したパスワードを実行時 Secret
+   `EDGE_EVER_AUTH_PASSWORD` に設定します
+   （32 文字以上を推奨）。管理者ユーザー名の既定値は `admin` です。別の名前を指定された場合は、
+   次のビルド前に Workers Builds 変数 `EDGE_EVER_AUTH_USERNAME` を設定します。
+5. 再度ビルドし、`/api/health` と `/api/openapi.json` を確認してから、
+   その管理者ユーザー名とパスワードでログインできることを確認します。
 6. GitHub Actions の `Update deployed EdgeEver` を有効にし、一度手動実行して、
-   Fork が最新の機能と修正を自動で受け取れるようにします。
+   Fork が今後の安定版と修正を自動で受け取れるようにします。
 ```
 
 > 詳細な要件: [AI Agent Cloudflare Deployment](docs/agent-deploy-cloudflare.md)。
@@ -121,10 +126,10 @@ EdgeEver をオンラインで導入してください:
 
 1. **リポジトリを Fork**：GitHub 右上の **Fork** で、EdgeEver を自分のアカウントへ Fork します。
 2. **Cloudflare リソースを作成**：D1 `edgeever` と R2 `edgeever-resources` を作ります。
-3. **プロジェクトを取り込み、設定**：Fork を Cloudflare **Workers & Pages** に取り込み、`main` を本番ブランチにします。binding は導入コマンドが作ります。Fork 内のファイルは編集しないでください。
-4. **管理者パスワードを設定**：Worker Secret `EDGE_EVER_AUTH_PASSWORD` を追加し、管理者ログイン用パスワードを値にします。このインスタンス専用の、32 文字以上の強いパスワードを推奨します。
-5. **ビルドと確認**：初回ビルドを開始します。導入後、`/api/health` が `200` を返すことと、ユーザー名 `admin` と設定したパスワードでログインできることを確認します。
-6. **自動更新を有効化**：Fork の **Actions** タブで **I understand my workflows, go ahead and enable them** を押し、**Update deployed EdgeEver** を一度手動実行して、以降の機能と修正を自動で受け取れるようにします。
+3. **プロジェクトを取り込み、設定**：Cloudflare **Workers & Pages** で Fork の `main` ブランチから `edgeever` という名前の Worker を作成します。リポジトリのルートと、Cloudflare 上で実行される Workers Builds の既定のデプロイコマンドを使い、API トークンの D1 読み取り・編集権限を確認します。binding はデプロイコマンドが作るため、Fork 内のファイルは編集しないでください。
+4. **管理者パスワードを準備**：管理者ログイン用パスワードを用意します。32 文字以上を推奨します。Worker 作成後、実行時 Secret `EDGE_EVER_AUTH_PASSWORD` に保存します。
+5. **ビルドと確認**：Save and Deploy で Worker が作成され、ビルドが始まります。管理者 Secret がないため失敗した場合は、手順 4 の実行時 Secret を追加して再試行します。管理者ユーザー名の既定値は `admin` です。別の名前を使う場合は、再試行前に Workers Builds 変数 `EDGE_EVER_AUTH_USERNAME` を設定します。導入後に `/api/health` が `200` を返すことを確認し、設定した管理者ユーザー名とパスワードでログインします。
+6. **自動更新を有効化**：Fork の **Actions** タブで **I understand my workflows, go ahead and enable them** を押し、**Update deployed EdgeEver** を一度手動実行して、今後の安定版と修正を自動で受け取れるようにします。
 
 > 📖 手順と設定の詳細は [Online Deployment Guide](docs/deploy-cloudflare-button.md) を見てください。
 
@@ -139,8 +144,6 @@ curl -fsSL https://edgeever.org/install.sh | bash
 ```
 
 このコマンドは最新イメージを引き、管理者パスワードを生成し、Docker Compose で EdgeEver を起動し、毎日の自動更新を設定します。
-
-公式コンテナイメージは GitHub Container Registry（GHCR）にあります。中国本土などの一部ネットワークでは遅い、またはタイムアウトすることがあります。引き出せない場合は、導入前に使えるネットワークプロキシか信頼できるレジストリミラーを設定してください。第三者のネットワークやレジストリの可用性と安全性は、利用者自身が判断してください。
 
 手動導入と設定は [Docker deployment guide](docs/deploy-docker.md) を見てください。
 
@@ -175,7 +178,7 @@ EdgeEver の使い方、AI Agent の実例、費用対効果の高い / 無料�
 
 ## プラグインとテーマ
 
-EdgeEver の Web とデスクトップはプラグインと、コードなしテーマに対応します。プラグインマーケット、GitHub、Manifest URL から入れられます。インストール一覧は現在の作業領域に付き、ブラウザとデスクトップのあいだで共有されます。各クライアントはパッケージを手元でダウンロードし、検証します。ネイティブの Android と iOS はプラグインを実行しません。設定と秘密情報は今の端末に残ります。公式マーケットは無料かつオープンソースのプラグインだけを掲載します。GitHub や Manifest URL からの直接インストールには、この条件は適用しません。開発者は `@edgeever/plugin-api` を使えます。 [plugin development guide](docs/plugin-development.md) と [marketplace submission policy](docs/plugin-marketplace-policy.md) を見てください。
+Web とデスクトップは機能プラグインとカスタムテーマに対応し、公式マーケット、GitHub、Manifest URL から手軽に導入でき、作業領域を通じて同期されます。開発者は `@edgeever/plugin-api` で拡張できます。詳細は [plugin development guide](docs/plugin-development.md) と [marketplace submission policy](docs/plugin-marketplace-policy.md) を参照してください。
 
 ## 技術スタック
 

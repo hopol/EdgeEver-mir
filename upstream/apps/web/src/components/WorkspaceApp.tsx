@@ -46,7 +46,7 @@ import {
 } from "@/lib/mobile-editor";
 import { cn } from "@/lib/utils";
 import { isBrowserOffline, isBrowserOnline } from "@/lib/network-status";
-import { createDefaultDiagramDocument, diagramFallbackMarkdown, getNotebookDescendantIds, markdownToDoc, parseDiagramDocument, serializeDiagramDocument, type DiagramKind, type Notebook, type AuthUser, type MemoSummary, type MemoDetail, type MemoTemplate as SavedMemoTemplate } from "@edgeever/shared";
+import { createDefaultDiagramDocument, createDefaultInfographicDocument, createDefaultTableDocument, diagramFallbackMarkdown, getNotebookDescendantIds, hasTableDocumentMarker, infographicFallbackMarkdown, markdownToDoc, parseDiagramDocument, parseInfographicDocument, parseTableDocument, serializeDiagramDocument, serializeInfographicDocument, serializeTableDocument, tableFallbackMarkdown, type NoteCreateKind, type Notebook, type AuthUser, type MemoSummary, type MemoDetail, type MemoTemplate as SavedMemoTemplate } from "@edgeever/shared";
 import { toggleMobileMemoSelection } from "@edgeever/shared/mobile-ui";
 import type {
   Pane,
@@ -103,6 +103,7 @@ import {
   putLocalMemo,
   putLocalNotebook,
 } from "@/lib/local-mirror";
+import { isNotebookNotEmptyError } from "@/lib/notebook-delete";
 import { getPersistentDataScopeOrigin } from "@/lib/app-page-path";
 import { createRepository } from "@/lib/repository";
 import { notifyRepositoryMutation } from "@/lib/repository-events";
@@ -132,11 +133,14 @@ import { EditorPaneErrorBoundary, EditorRecoveryPane } from "./EditorPaneErrorBo
 import { isMarkdownFile, readMarkdownFile } from "@/lib/markdown-file-import";
 import { compressImageForUpload } from "@/lib/image-compression";
 import { createScreenshotMemo, screenshotFileFromImportPayload, screenshotImportDedupeKey, screenshotImportGate } from "@/lib/screenshot-import";
+import { createWeChatChatMemo } from "@/lib/wechat-chat-import";
 import { isDesktopResourceRuntime, stageDesktopResource, toDesktopResourceUrl } from "@/lib/desktop-resources";
 import { findMatchingMemoResource } from "@/lib/staged-resource-repair";
 
 const EditorPane = lazy(() => import("./EditorPane").then((module) => ({ default: module.EditorPane })));
 const DiagramEditorPane = lazy(() => import("./DiagramEditorPane"));
+const TableEditorPane = lazy(() => import("./TableEditorPane"));
+const InfographicEditorPane = lazy(() => import("./InfographicEditorPane"));
 const AssetsPane = lazy(() => import("./AssetsPane").then((module) => ({ default: module.AssetsPane })));
 const SettingsPane = lazy(() => import("./SettingsPane").then((module) => ({ default: module.SettingsPane })));
 const PluginMarketplacePane = lazy(() => import("./PluginMarketplacePane").then((module) => ({ default: module.PluginMarketplacePane })));
@@ -259,6 +263,8 @@ export const WorkspaceApp = ({
   const [notebookNameDialog, setNotebookNameDialog] = useState<NotebookNameDialogState | null>(null);
   const [notebookDeleteConfirmation, setNotebookDeleteConfirmation] = useState<Notebook | null>(null);
   const [appNoticeDialog, setAppNoticeDialog] = useState<AppNoticeDialogState | null>(null);
+  const [wechatImportFailureId, setWeChatImportFailureId] = useState<string | null>(null);
+  const [wechatImportsInProgress, setWeChatImportsInProgress] = useState(0);
   const [pendingCatalogTrustPluginIds, setPendingCatalogTrustPluginIds] = useState<string[]>([]);
   const [isExportingSelectedMemos, setIsExportingSelectedMemos] = useState(false);
   const [selectedMarkdownExportProgress, setSelectedMarkdownExportProgress] = useState<MarkdownExportProgress>({
@@ -1215,11 +1221,20 @@ export const WorkspaceApp = ({
       await queryClient.invalidateQueries({ queryKey: ["notebooks"] });
       await queryClient.invalidateQueries({ queryKey: ["memos"] });
     },
+    onError: (error) => {
+      setNotebookDeleteConfirmation(null);
+      setAppNoticeDialog({
+        title: t("workspaceDialogs.deleteNotebookFailedTitle"),
+        description: isNotebookNotEmptyError(error)
+          ? t("workspaceDialogs.deleteNotebookNotEmpty")
+          : t("workspaceDialogs.deleteNotebookFailed"),
+      });
+    },
   });
 
   const revealCreatedMemo = (memo: MemoDetail) => {
     const targetNotebookId = memo.notebookId;
-    const isDiagram = Boolean(parseDiagramDocument(memo.contentMarkdown));
+    const isStructuredNote = Boolean(parseDiagramDocument(memo.contentMarkdown) || parseTableDocument(memo.contentMarkdown) || parseInfographicDocument(memo.contentMarkdown));
 
     setMemoView("notebook");
     setSearch("");
@@ -1241,11 +1256,11 @@ export const WorkspaceApp = ({
     navigateWorkspaceHome();
     setRightView("editor");
     pendingCreatedMemoIdRef.current = memo.id;
-    setCreatedMemoEditId(isDiagram ? null : memo.id);
+    setCreatedMemoEditId(isStructuredNote ? null : memo.id);
     setSelectedMemoId(memo.id);
     setActivePane("editor");
 
-    if (!isDesktopViewport() && !isDiagram) {
+    if (!isDesktopViewport() && !isStructuredNote) {
       openStandaloneMobileEditor(memo.id);
     }
   };
@@ -1607,6 +1622,8 @@ export const WorkspaceApp = ({
     : null;
   const selectedMemo = memoQuery.data?.memo ?? cachedSelectedMemo;
   const selectedDiagram = parseDiagramDocument(selectedMemo?.contentMarkdown);
+  const selectedTableNote = hasTableDocumentMarker(selectedMemo?.contentMarkdown);
+  const selectedInfographicNote = Boolean(parseInfographicDocument(selectedMemo?.contentMarkdown));
   const desktopNotebookSidebarCollapsed = Boolean(isDesktop && notebookSidebarCollapsed);
   const desktopFocusModeActive = Boolean(
     isDesktop && desktopFocusMode && rightView === "editor" && selectedMemo && !memoSelectionModeActive
@@ -1701,7 +1718,11 @@ export const WorkspaceApp = ({
     setTemplatesOpen(false);
     setMobileBottomNavActive("home");
     creatingMemoSelectionRef.current = true;
+    let resumeDesktopSync: (() => void) | null = null;
     try {
+      if (isDesktopResourceRuntime()) {
+        resumeDesktopSync = await (await import("@/lib/desktop-sync")).pauseDesktopSyncForImport();
+      }
       const preparedFile = imageCompressionEnabled ? (await compressImageForUpload(file)).file : file;
       const memo = await createScreenshotMemo({
         notebookId,
@@ -1735,7 +1756,9 @@ export const WorkspaceApp = ({
           contentMarkdown: content.contentMarkdown,
           tags: created.tags,
         }),
-        deleteMemo: (memoId) => repository.deleteMemo(memoId, true),
+        deleteMemo: (memoId) => isDesktopResourceRuntime()
+          ? import("@/lib/desktop-repository").then(({ cancelPendingDesktopImportMemo }) => cancelPendingDesktopImportMemo(memoId))
+          : repository.deleteMemo(memoId, true),
       });
       await putLocalMemo(localDataScope, memo);
       revealCreatedMemo(memo);
@@ -1747,13 +1770,133 @@ export const WorkspaceApp = ({
         title: t("memoList.importScreenshotFailedTitle"),
         description: t("memoList.importScreenshotFailed"),
       });
+    } finally {
+      resumeDesktopSync?.();
     }
   }, [defaultMemoNotebookId, imageCompressionEnabled, localDataScope, memoView, notebooks, repository, selectedNotebookId, t]);
 
   const handleImportScreenshotRef = useRef(handleImportScreenshot);
   handleImportScreenshotRef.current = handleImportScreenshot;
 
-  const handleCreateMemo = (kind?: DiagramKind) => {
+  const pendingWeChatImportsRef = useRef<Array<{
+    ok: boolean;
+    reason?: string;
+    importId?: string;
+    title?: string;
+    markdown?: string;
+    media?: Array<{ id: string; filename: string; mimeType: string; byteSize: number }>;
+  }>>([]);
+
+  const handleImportWeChatChat = useCallback(async (payload: {
+    ok: boolean;
+    reason?: string;
+    importId?: string;
+    title?: string;
+    markdown?: string;
+    media?: Array<{ id: string; filename: string; mimeType: string; byteSize: number }>;
+  }) => {
+    const bridge = window.edgeeverDesktop;
+    if (!payload.ok || !payload.importId || !payload.markdown) {
+      setAppNoticeDialog({
+        title: t("memoList.importWeChatFailedTitle"),
+        description: payload.reason === "unrecognized"
+          ? t("memoList.importWeChatUnrecognized")
+          : t("memoList.importWeChatFailed"),
+      });
+      return;
+    }
+    const notebookId = selectedNotebookId && notebooks.some((notebook) => notebook.id === selectedNotebookId) && memoView !== "trash"
+      ? selectedNotebookId
+      : defaultMemoNotebookId;
+    if (!notebookId) {
+      pendingWeChatImportsRef.current.push(payload);
+      return;
+    }
+    const importId = payload.importId;
+    const markdown = payload.markdown;
+    setTemplatesOpen(false);
+    setMobileBottomNavActive("home");
+    creatingMemoSelectionRef.current = true;
+    setWeChatImportsInProgress((count) => count + 1);
+    let savedMemo: MemoDetail | null = null;
+    let resumeDesktopSync: (() => void) | null = null;
+    try {
+      if (isDesktopResourceRuntime()) {
+        resumeDesktopSync = await (await import("@/lib/desktop-sync")).pauseDesktopSyncForImport();
+      }
+      const memo = await createWeChatChatMemo({
+        notebookId,
+        title: payload.title?.trim() || "",
+        markdown,
+        media: payload.media ?? [],
+        createMemo: (input) => repository.createMemo(input),
+        readMedia: async (item) => {
+          const file = await bridge?.readWeChatImportMedia?.(importId, item.id);
+          if (!file?.bytes?.byteLength) throw new Error("Missing WeChat attachment");
+          const bytes = file.bytes;
+          const copy = new ArrayBuffer(bytes.byteLength);
+          new Uint8Array(copy).set(bytes);
+          return new File([copy], file.filename || item.filename, { type: file.mimeType || item.mimeType });
+        },
+        prepareFile: async (file) => (imageCompressionEnabled && file.type.startsWith("image/")
+          ? (await compressImageForUpload(file)).file
+          : file),
+        uploadResource: async (memoId, uploadFile) => {
+          try {
+            const { resource } = await repository.uploadMemoResource(memoId, uploadFile);
+            return { url: toDesktopResourceUrl(resource.url) };
+          } catch (error) {
+            if (!isDesktopResourceRuntime()) throw error;
+            const listed = await repository.listResources().catch(() => ({ resources: [] as Array<{ memoId?: string; url: string; filename?: string | null; kind?: string | null }> }));
+            const existing = findMatchingMemoResource(
+              listed.resources.filter((resource) => resource.memoId === memoId),
+              uploadFile.name,
+              uploadFile.type.startsWith("image/") ? "image" : "attachment",
+            );
+            if (existing) return { url: toDesktopResourceUrl(existing.url) };
+            const staged = await stageDesktopResource(memoId, uploadFile);
+            if (!staged) throw error;
+            return { url: `edgeever-staged://${staged.id}` };
+          }
+        },
+        updateMemo: (created, content) => repository.updateMemo(created, {
+          expectedRevision: created.revision,
+          expectedContentHash: created.contentHash,
+          editSessionId: `wechat:${created.id}`,
+          title: created.title ?? payload.title ?? "",
+          contentJson: content.contentJson,
+          contentMarkdown: content.contentMarkdown,
+          tags: created.tags,
+        }),
+        deleteMemo: (memoId) => isDesktopResourceRuntime()
+          ? import("@/lib/desktop-repository").then(({ cancelPendingDesktopImportMemo }) => cancelPendingDesktopImportMemo(memoId))
+          : repository.deleteMemo(memoId, true),
+      });
+      savedMemo = memo;
+      await bridge?.finishWeChatImport?.(importId, true).catch(() => undefined);
+      await putLocalMemo(localDataScope, memo).catch(() => undefined);
+      revealCreatedMemo(memo);
+    } catch {
+      if (!savedMemo) {
+        await bridge?.finishWeChatImport?.(importId, false).catch(() => undefined);
+        setWeChatImportFailureId(importId);
+      }
+      creatingMemoSelectionRef.current = false;
+    } finally {
+      resumeDesktopSync?.();
+      setWeChatImportsInProgress((count) => Math.max(0, count - 1));
+    }
+  }, [defaultMemoNotebookId, imageCompressionEnabled, localDataScope, memoView, notebooks, repository, selectedNotebookId, t]);
+
+  const handleImportWeChatChatRef = useRef(handleImportWeChatChat);
+  handleImportWeChatChatRef.current = handleImportWeChatChat;
+
+  useEffect(() => {
+    const pending = pendingWeChatImportsRef.current.splice(0);
+    for (const payload of pending) void handleImportWeChatChat(payload);
+  }, [handleImportWeChatChat]);
+
+  const handleCreateMemo = (kind?: NoteCreateKind) => {
     const targetNotebookId = createMemoNotebookId;
 
     if (!targetNotebookId || memoView === "trash") {
@@ -1770,6 +1913,36 @@ export const WorkspaceApp = ({
     setTemplatesOpen(false);
     setMobileBottomNavActive("home");
     creatingMemoSelectionRef.current = true;
+    if (kind === "infographic") {
+      const infographic = createDefaultInfographicDocument();
+      createMemoMutation.mutate({
+        notebookId: targetNotebookId,
+        title: t("infographic.name"),
+        contentJson: markdownToDoc(infographicFallbackMarkdown(infographic)),
+        contentMarkdown: serializeInfographicDocument(infographic),
+        tags: [],
+      });
+      return;
+    }
+    if (kind === "table") {
+      const table = createDefaultTableDocument({
+        name: t("structuredTable.defaultFields.name"),
+        status: t("structuredTable.defaultFields.status"),
+        date: t("structuredTable.defaultFields.date"),
+        sample: t("structuredTable.defaultFields.sample"),
+        notStarted: t("structuredTable.defaultFields.notStarted"),
+        inProgress: t("structuredTable.defaultFields.inProgress"),
+        done: t("structuredTable.defaultFields.done"),
+      });
+      createMemoMutation.mutate({
+        notebookId: targetNotebookId,
+        title: t("structuredTable.name"),
+        contentJson: markdownToDoc(tableFallbackMarkdown(table)),
+        contentMarkdown: serializeTableDocument(table),
+        tags: [],
+      });
+      return;
+    }
     const diagram = kind ? createDefaultDiagramDocument(kind) : null;
     createMemoMutation.mutate({
       notebookId: targetNotebookId,
@@ -2414,6 +2587,10 @@ export const WorkspaceApp = ({
         }
       }
     });
+    // The Markdown listener is what marks the renderer ready, so register this first.
+    const removeWeChatListener = bridge.onImportWeChatChat?.((payload) => {
+      void handleImportWeChatChatRef.current(payload);
+    }) ?? (() => {});
     const removeMarkdownListener = bridge.onImportMarkdown((payload) => {
       const notebookId = selectedNotebookId && notebooks.some((notebook) => notebook.id === selectedNotebookId)
         ? selectedNotebookId
@@ -2427,6 +2604,7 @@ export const WorkspaceApp = ({
     }) ?? (() => {});
     return () => {
       removeCommandListener();
+      removeWeChatListener();
       removeMarkdownListener();
       removeScreenshotListener();
     };
@@ -2852,9 +3030,18 @@ export const WorkspaceApp = ({
       : isStandaloneRuntime
         ? t("workspace.pullToRefresh.pullNotes")
         : t("workspace.pullToRefresh.pullPage");
+  const showMobileSettingsNav = visibleActivePane === "editor" && rightView === "settings";
+
   return (
     <WorkspaceMotionProvider>
       <div className="edgeever-workspace-shell flex h-[100dvh] overflow-hidden text-slate-950">
+      {wechatImportsInProgress > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center" role="status" aria-live="polite">
+          <div className="rounded-full border border-slate-200 bg-card px-4 py-2 text-sm font-medium text-slate-700 shadow-lg">
+            {t("memoList.importWeChatInProgress")}
+          </div>
+        </div>
+      )}
       {pullToRefreshVisible && (
         <div
           className="pointer-events-none fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-50 flex justify-center lg:hidden"
@@ -3103,7 +3290,7 @@ export const WorkspaceApp = ({
             />
           </section>
 
-          <section className={cn("edgeever-workspace-editor min-h-0 min-w-0 lg:block", visibleActivePane === "editor" ? "block" : "hidden")}>
+          <section className={cn("edgeever-workspace-editor min-h-0 min-w-0 lg:block", visibleActivePane === "editor" ? "block" : "hidden", showMobileSettingsNav && "pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0")}>
             {shouldRenderRightPane && (
               <Suspense fallback={<PaneLoadingFallback label={rightPaneLoadingLabel} />}>
                 <m.div key={rightView} className="h-full min-h-0 min-w-0" {...paneEnterMotion}>
@@ -3160,7 +3347,7 @@ export const WorkspaceApp = ({
                   ) : rendererRecoveryMode ? (
                     <EditorRecoveryPane />
                   ) : memoSelectionModeActive ? (
-                    <div className="flex h-full min-w-0 flex-col bg-card">
+                    <div className="flex h-full min-w-0 flex-col bg-transparent">
                       {memoSelectionActionBar}
                     </div>
                   ) : (
@@ -3205,6 +3392,46 @@ export const WorkspaceApp = ({
                           onToggleDesktopFocusMode={toggleDesktopFocusMode}
                           onOpenExecutionCenter={handleOpenExecutionCenter}
                           
+                        />
+                      ) : selectedMemo && selectedInfographicNote ? (
+                        <InfographicEditorPane
+                          key={selectedMemo.id}
+                          memo={selectedMemo}
+                          repository={repository}
+                          readOnly={memoView === "trash" || selectedMemo.isDeleted}
+                          onBackToList={() => {
+                            clearPendingCreatedMemo();
+                            setActivePane("memos");
+                          }}
+                          onSaved={async (memo) => {
+                            await putLocalMemo(localDataScope, memo);
+                            cacheMemoDetail(queryClient, memo, memoView);
+                            updateMemoSummaryInLists(queryClient, memoToSummary(memo));
+                            await Promise.all([
+                              queryClient.invalidateQueries({ queryKey: ["memos"], refetchType: "inactive" }),
+                              queryClient.invalidateQueries({ queryKey: ["notebooks"], refetchType: "inactive" }),
+                            ]);
+                          }}
+                        />
+                      ) : selectedMemo && selectedTableNote ? (
+                        <TableEditorPane
+                          key={selectedMemo.id}
+                          memo={selectedMemo}
+                          repository={repository}
+                          readOnly={memoView === "trash" || selectedMemo.isDeleted}
+                          onBackToList={() => {
+                            clearPendingCreatedMemo();
+                            setActivePane("memos");
+                          }}
+                          onSaved={async (memo) => {
+                            await putLocalMemo(localDataScope, memo);
+                            cacheMemoDetail(queryClient, memo, memoView);
+                            updateMemoSummaryInLists(queryClient, memoToSummary(memo));
+                            await Promise.all([
+                              queryClient.invalidateQueries({ queryKey: ["memos"], refetchType: "inactive" }),
+                              queryClient.invalidateQueries({ queryKey: ["notebooks"], refetchType: "inactive" }),
+                            ]);
+                          }}
                         />
                       ) : (
                       <EditorPane
@@ -3377,6 +3604,29 @@ export const WorkspaceApp = ({
           onConfirm={() => setAppNoticeDialog(null)}
         />
       )}
+      {wechatImportFailureId && (
+        <AppConfirmDialog
+          title={t("memoList.importWeChatFailedTitle")}
+          description={t("memoList.importWeChatRetryHint")}
+          confirmLabel={t("memoList.importWeChatRetry")}
+          closeOnBrowserBack={false}
+          tone="neutral"
+          onCancel={() => setWeChatImportFailureId(null)}
+          onConfirm={() => {
+            const importId = wechatImportFailureId;
+            setWeChatImportFailureId(null);
+            void Promise.resolve(window.edgeeverDesktop?.retryWeChatImport?.(importId) ?? false).then((retried) => {
+              if (!retried) setAppNoticeDialog({
+                title: t("memoList.importWeChatFailedTitle"),
+                description: t("memoList.importWeChatFailed"),
+              });
+            }).catch(() => setAppNoticeDialog({
+              title: t("memoList.importWeChatFailedTitle"),
+              description: t("memoList.importWeChatFailed"),
+            }));
+          }}
+        />
+      )}
       {pendingCatalogTrustPluginIds.length > 0 ? (
         <AppConfirmDialog
           title={t(PLUGIN_TRUST_WARNING_COPY.titleKey)}
@@ -3411,7 +3661,7 @@ export const WorkspaceApp = ({
         options={requestedPluginPanel?.options}
         onClose={() => setRequestedPluginPanel(null)}
       />
-      {visibleActivePane !== "editor" && !memoSelectionModeActive && (
+      {(visibleActivePane !== "editor" || showMobileSettingsNav) && !memoSelectionModeActive && (
         <MobileBottomNav
           activeItem={mobileBottomNavActive}
           canCreateMemo={canCreateMemo && memoView !== "trash"}

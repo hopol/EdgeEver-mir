@@ -3,9 +3,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRoot } from "react-dom/client";
 import { MobileStandaloneTiptapEditor } from "@/components/MobileStandaloneTiptapEditor";
 import { initializeTheme } from "@/components/ThemeProvider";
+import { applyEditorBodyFontPreference } from "@/lib/editor-body-font";
+import { installEditorBodyFontFaces } from "@/lib/editor-body-font-faces";
+import { applyUiFontPreference } from "@/lib/ui-font";
 import { bootstrapI18n } from "@/i18n";
 import { defaultLocale, getBrowserLocale } from "@/i18n/locales";
 import "./styles/mobile-markdown-editor.css";
+import "./styles/editor-body-fonts.css";
 
 declare global {
   interface Window {
@@ -74,6 +78,9 @@ if (!root) {
 }
 
 initializeTheme();
+installEditorBodyFontFaces();
+applyEditorBodyFontPreference();
+applyUiFontPreference();
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false, retry: 1, staleTime: 15_000 } },

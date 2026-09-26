@@ -38,6 +38,7 @@ EdgeEver 是一款現代化的開源筆記與個人知識庫工作區。它為�
 * **Evernote**：功能日益臃腫，商業廣告與繁雜附加功能充斥，效能與記憶體佔用居高不下；且資料相對封閉難以匯出，免費版限制重重，支援 AI/MCP 的方案訂閱成本高昂。
 * **Obsidian**：Markdown 開放，核心閉源；官方同步收費，第三方同步繁瑣；純本地檔案依賴遍歷掃描，當筆記累積到數千上萬條或載入複雜外掛後，冷啟動與全庫檢索明顯卡頓遲緩；圖片與附件與文字混存，儲存庫體積極易膨脹導致行動端同步緩慢，且刪除筆記後殘留附件難清理；對於「隨時隨地隨手記」的輕量場景來說偏重。
 * **Memos / Flomo 等輕量筆記**：雖然簡單好用，但時間軸卡片版面與習慣了經典「三欄工作流程」的使用者有著天然的互動習慣差異。
+* **思源筆記等區塊級知識庫**：功能深厚且支援開源自託管，但全盤的「區塊級（Block）」架構使得日常隨手記錄與連續排版書寫的心智負擔偏重；且缺少零伺服器成本的 Serverless 部署型態，多端同步主要依賴官方付費訂閱，或需額外付費解鎖 S3/WebDAV 同步特性並自備儲存。
 
 **EdgeEver 恰好填補了這一空白**：全端開源，雲端同步與自行託管都可自行部署；同時保留經典三欄版面與流暢排版，萬條筆記常駐依然輕盈絲滑，原生支援接入 AI Agent，部署維護零門檻、零費用。
 
@@ -67,7 +68,7 @@ EdgeEver 是一款現代化的開源筆記與個人知識庫工作區。它為�
 - **自由選擇部署方式**：既可免費執行於 Cloudflare Serverless，也可透過 Docker 部署到 VPS、NAS 或家用伺服器。按 Cloudflare 免費儲存額度估算，個人部署可容納約 15 萬條短筆記和約 5 萬張圖片；Docker 儲存可按需擴充，輕鬆承載百萬級筆記與海量圖片。
 - **資料開放，不設圍牆**：以標準 SQLite 儲存，提供 REST API、MCP 與 CLI 介面。資料隨時可讀可匯出，不再擔心被任何特定平台綁定。
 - **無損 ZIP 打包與無縫遷移**：一鍵打包匯出包含 Markdown、Front Matter、巢狀目錄及附件的完整檔案，同時保留歷史版本與結構化資料，方便在不同實例間完整還原。
-- **原生 AI Agent 智慧聯動**：內建 MCP（Model Context Protocol）協定，支援 Claude Code、Codex、Antigravity 等 AI 助手直接讀取與整理筆記，也可與 Notion Database、飛書多維表格輕鬆串接。
+- **原生 AI Agent 智慧聯動**：內建 MCP（Model Context Protocol）協定，支援 Claude Code、Codex、Antigravity、WorkBuddy 等 AI Agent 直接讀取與整理筆記，也可與 Notion Database、飛書多維表格輕鬆串接。
 - **接入自己的 AI 模型**：支援新增多個 OpenAI、Anthropic、Gemini 相容服務與第三方中轉平台，在編輯器中隨時對全文或選取範圍進行智慧摘要、重點擷取、文法校對、翻譯與續寫潤飾。
 - **豐富的外掛 API**：可透過[外掛開發文件](docs/plugin-development.zh-CN.md)擴充 EdgeEver。
 - **多端無縫同步，無裝置限制**：自行託管資料無商業限制，擺脫免費帳號僅限 2 台裝置的束縛，在 PC、平板與手機上隨心同步。
@@ -98,19 +99,22 @@ Cloudflare 線上部署可以選擇以下兩種方式之一：
 
 ### 方案一：AI Agent 一鍵部署（建議）
 
-將下方提示詞直接複製傳送給 AI Agent（如 Codex、Claude、Cursor、workbuddy、Antigravity、OpenClaw、Hermes Agent 等）。執行過程中，如需存取 GitHub 或 Cloudflare，請確認權限範圍並依提示完成授權。
+將下方提示詞直接複製傳送給 AI Agent（如 Codex、Claude、Cursor、WorkBuddy、Antigravity、OpenClaw、Hermes Agent 等）。執行過程中，如需存取 GitHub 或 Cloudflare，請確認權限範圍並依提示完成授權。
 
 ```text
-請線上完成 EdgeEver 部署：
+請全程透過 GitHub 和 Cloudflare 線上部署 EdgeEver：
 1. Fork https://github.com/tianma-if/edgeever。
 2. 在 Cloudflare 中建立 D1 `edgeever` 與 R2 `edgeever-resources`。
-3. 將這個 Fork 匯入 Cloudflare Workers & Pages，並將 `main` 設為正式環境分支。
-4. 新增一個名為 `EDGE_EVER_AUTH_PASSWORD` 的 Worker Secret，值為使用者自行設定的
-   管理員登入密碼，建議使用至少 32 個字元且僅用於此實例的強密碼。
-5. 啟動首次建置，驗證 `/api/health`、`/api/openapi.json`，並使用使用者名稱 `admin`
-   和設定的密碼驗證登入。
+3. 在 Workers & Pages 中從 Fork 的 `main` 分支建立名為 `edgeever` 的 Worker。
+   使用儲存庫根目錄，保留 Cloudflare Workers Builds 的預設部署指令，確認其 API Token
+   具備 D1 讀取及編輯權限，然後儲存並部署。
+4. Worker 建立後，設定執行時 Secret `EDGE_EVER_AUTH_PASSWORD`，值為使用者指定的密碼
+   （建議至少 32 個字元）。管理員使用者名稱預設為 `admin`；如需自訂，請在再次建置前
+   設定 Workers Builds 建置變數 `EDGE_EVER_AUTH_USERNAME`。
+5. 再次建置，驗證 `/api/health` 和 `/api/openapi.json`，再用該管理員
+   使用者名稱和密碼驗證登入。
 6. 啟用並手動執行一次名為 `Update deployed EdgeEver` 的 GitHub Actions 工作流程，
-   以便後續自動同步更新，持續獲得 EdgeEver 最新的產品特性與問題修復。
+   以便後續自動同步正式版本，持續獲得 EdgeEver 的功能更新與問題修復。
 ```
 
 > 詳細約定與要求請查看：[AI Agent 線上部署約定](docs/agent-deploy-cloudflare.zh-CN.md)。
@@ -121,10 +125,10 @@ Cloudflare 線上部署可以選擇以下兩種方式之一：
 
 1. **Fork 儲存庫**：在 GitHub 點選右上角 **Fork**，將專案 Fork 到您的個人帳戶下。
 2. **建立 Cloudflare 資源**：建立 D1 `edgeever` 與 R2 `edgeever-resources`。
-3. **匯入並設定專案**：在 Cloudflare **Workers & Pages** 中匯入該 Fork，並將 `main` 設為正式環境分支。binding 由部署指令產生，不要修改 Fork 中的檔案。
-4. **設定管理員密碼**：新增一個名為 `EDGE_EVER_AUTH_PASSWORD` 的 Worker Secret，並將其值設為您要使用的管理員登入密碼。建議使用至少 32 個字元且僅用於此實例的強密碼。
-5. **首次建置與驗證**：啟動首次建置。部署完成後造訪 `/api/health`，確認回傳 `200`，並使用使用者名稱 `admin` 和設定的密碼驗證登入。
-6. **啟用自動更新**：進入 Fork 的 **Actions** 分頁，點選 **I understand my workflows, go ahead and enable them**，然後手動執行一次 **Update deployed EdgeEver**，確保後續能夠自動獲得 EdgeEver 的最新功能與修復。
+3. **匯入並設定專案**：在 Cloudflare **Workers & Pages** 中從 Fork 的 `main` 分支建立名為 `edgeever` 的 Worker。使用儲存庫根目錄，保留由 Cloudflare 線上執行的 Workers Builds 預設部署指令，並確認其 API Token 具備 D1 讀取及編輯權限。binding 由部署指令產生，不要修改 Fork 中的檔案。
+4. **準備管理員密碼**：準備管理員登入密碼，建議至少 32 個字元。Worker 建立後，將它儲存為執行時 Secret `EDGE_EVER_AUTH_PASSWORD`。
+5. **首次建置與驗證**：儲存並部署會建立 Worker 並啟動建置。如因缺少管理員 Secret 而失敗，新增步驟 4 的執行時 Secret 後重試。管理員使用者名稱預設為 `admin`；如需使用其他名稱，請在重試建置前設定 Workers Builds 建置變數 `EDGE_EVER_AUTH_USERNAME`。部署完成後造訪 `/api/health`，確認回傳 `200`，再用設定的管理員使用者名稱和密碼登入。
+6. **啟用自動更新**：進入 Fork 的 **Actions** 分頁，點選 **I understand my workflows, go ahead and enable them**，然後手動執行一次 **Update deployed EdgeEver**，確保後續能夠自動獲得正式版本的功能更新與修復。
 
 > 📖 包含具體參數與建置指令的詳細步驟，請查看 [線上部署完整文件](docs/deploy-cloudflare-button.zh-CN.md)。
 
@@ -140,11 +144,6 @@ curl -fsSL https://edgeever.org/install.sh | bash
 
 此指令會自動拉取最新映像、產生管理員密碼、使用 Docker Compose 啟動
 EdgeEver，並設定每日自動更新。手動部署與設定說明見 [Docker 部署文件](docs/deploy-docker.zh-CN.md)。
-
-EdgeEver 官方容器映像託管於 GitHub Container Registry（GHCR）。部分中國大陸
-網路環境可能出現連線緩慢或逾時。如果無法正常拉取，請在部署前自行設定可用的
-網路代理或可信的映像加速服務。第三方網路及映像服務的可用性與安全性由
-使用者自行評估。
 
 ---
 
@@ -183,7 +182,7 @@ EdgeEver 官方容器映像託管於 GitHub Container Registry（GHCR）。部�
 
 ## 外掛與主題
 
-EdgeEver 的 Web 與桌面版支援外掛和無程式碼主題，可從外掛市集、GitHub 或 Manifest 網址安裝。安裝清單會隨目前工作區在瀏覽器和桌面應用程式之間同步，每個用戶端會自行下載並校驗外掛套件；Android 和 iOS 原生應用程式不執行外掛。設定和金鑰仍只保存在目前裝置。官方外掛市集僅收錄自由及開源外掛，此要求不限制使用者直接透過 GitHub 或 Manifest 網址安裝其他外掛。開發者可使用 `@edgeever/plugin-api`，詳情參閱[外掛開發文件](docs/plugin-development.zh-CN.md)和[官方外掛市集上架政策](docs/plugin-marketplace-policy.zh-CN.md)。
+Web 與桌面版支援功能外掛與個人化主題，可從官方市集、GitHub 或 Manifest 網址一鍵安裝，並隨工作區跨端同步。開發者可使用 `@edgeever/plugin-api` 擴充功能，詳情參閱[外掛開發文件](docs/plugin-development.zh-CN.md)與[官方外掛市集上架政策](docs/plugin-marketplace-policy.zh-CN.md)。
 
 ## 技術棧
 

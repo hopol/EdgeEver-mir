@@ -17,8 +17,10 @@ import {
   parseImageWidth,
   getImageReferrerPolicy,
   createEdgeEverDocumentExtensions,
+  parsePublishedNoteBodyFont,
   type PublicMemoShare,
 } from "@edgeever/shared";
+import { applyEditorBodyFontPreference } from "@/lib/editor-body-font";
 import { createEdgeEverMathematics } from "@edgeever/shared/mathematics";
 import { PdfAttachment } from "@/components/editor/PdfAttachment";
 import { FileAttachment } from "@/components/editor/FileAttachment";
@@ -158,7 +160,7 @@ const PublicSharePasswordForm = ({
   return (
     <main className="flex min-h-[100dvh] items-center justify-center bg-slate-50 px-5">
       <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-card p-8 shadow-sm">
-        <LockKeyhole className="mx-auto h-9 w-9 text-emerald-600" />
+        <LockKeyhole className="mx-auto h-9 w-9 text-slate-700" />
         <h1 className="mt-4 text-center text-xl font-semibold text-slate-900">{t("sharing.passwordRequiredTitle")}</h1>
         <p className="mt-2 text-center text-sm leading-6 text-slate-500">{t("sharing.passwordRequiredHint")}</p>
         <form className="mt-6 space-y-3" onSubmit={submit}>
@@ -192,6 +194,20 @@ export const PublicSharePage = () => {
   });
   const share = shareQuery.data?.share;
   const passwordRequired = isSharePasswordError(shareQuery.error, "share_password_required");
+  const publishedBodyFont = share ? parsePublishedNoteBodyFont(share.bodyFont) : undefined;
+
+  useEffect(() => {
+    if (publishedBodyFont === undefined) return undefined;
+    if (!publishedBodyFont) {
+      delete document.documentElement.dataset.editorBodyFont;
+      document.documentElement.style.removeProperty("--editor-body-font-family");
+    } else {
+      applyEditorBodyFontPreference({ choice: publishedBodyFont, customFamily: "" });
+    }
+    return () => {
+      applyEditorBodyFontPreference();
+    };
+  }, [publishedBodyFont]);
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -245,7 +261,7 @@ export const PublicSharePage = () => {
       <article className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-card shadow-sm">
         <header className="border-b border-slate-200 px-5 py-6 sm:px-10 sm:py-8">
           <div className="mb-5 flex items-center justify-between gap-4 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5 font-semibold text-emerald-700">
+            <span className="flex items-center gap-1.5 font-semibold text-slate-700">
               <ShieldCheck className="h-4 w-4" /> EdgeEver · {t("sharing.readOnly")}
             </span>
             <span className="flex items-center gap-1.5">

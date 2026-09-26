@@ -17,7 +17,7 @@ test("keeps the desktop create-note control compact with one neutral outline", (
   expect(source).toContain('className="group flex h-12 max-w-[calc(100%-2.25rem)]');
   expect(source).toContain('className="group relative flex h-12 min-w-9 flex-1');
   expect(source).toContain('before:inset-y-2.5');
-  expect(source).toContain('data-[state=open]:bg-emerald-50');
+  expect(source).toContain('data-[state=open]:bg-workspace-selection data-[state=open]:text-slate-950');
   expect(source).toContain('t("diagram.moreTypes")');
   expect(source).toContain('group-data-[state=open]:rotate-180');
   expect(source).toContain("edgeever-create-memo-split__more-label");
@@ -47,13 +47,16 @@ test("keeps the desktop sync status bar and sidebar chrome compact without shrin
 
 test("lists diagram note types in the create menu without beta badges", () => {
   const createTypeMenu = source.split("const CreateMemoTypeItems")[1]?.split("const getSyncStatusLabel")[0];
+  const diagramSection = createTypeMenu?.split('onCreateMemo("infographic")')[0];
 
   expect(createTypeMenu).toContain('onCreateMemo()');
   expect(createTypeMenu).toContain('onCreateMemo("mind-map")');
   expect(createTypeMenu).toContain('onCreateMemo("flowchart")');
   expect(createTypeMenu).toContain('onCreateMemo("architecture")');
-  expect(createTypeMenu).not.toContain("DiagramBetaBadge");
-  expect(createTypeMenu).not.toContain("Beta");
+  expect(createTypeMenu).toContain('onCreateMemo("table")');
+  expect(diagramSection).not.toContain("DiagramBetaBadge");
+  expect(diagramSection).not.toContain("Beta");
+  expect(createTypeMenu).toContain("Beta");
 });
 
 describe("NotebookPane sidebar collapse", () => {
@@ -96,6 +99,19 @@ describe("NotebookPane sidebar collapse", () => {
     expect(css).toContain(".edgeever-workspace-grid--sidebar-collapsed");
     expect(css).toContain("var(--notebook-sidebar-width)");
     expect(css).toContain("--notebook-sidebar-width: 3.5rem;");
+  });
+});
+
+describe("NotebookPane tree expansion persistence", () => {
+  test("stores collapsed branches outside individual tree items", () => {
+    const treeItemSource = readFileSync(new URL("./NotebookTreeItem.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain("readNotebookTreeCollapsedIdsPreference");
+    expect(source).toContain("writeNotebookTreeCollapsedIdsPreference(collapsedNotebookIds)");
+    expect(source).toContain("collapsedNotebookIds={collapsedNotebookIds}");
+    expect(treeItemSource).toContain("const open = !collapsedNotebookIds.has(node.id)");
+    expect(treeItemSource).not.toContain("const [open, setOpen] = useState(true)");
+    expect(treeItemSource).not.toContain("if (hasSelectedDescendant) {");
   });
 });
 
