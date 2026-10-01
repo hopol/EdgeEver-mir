@@ -1,5 +1,9 @@
 import { z } from "zod";
 import {
+  MAX_NOTE_PROSE_CSS_BYTES,
+  NOTE_PROSE_PALETTE_CHOICES,
+} from "./note-prose";
+import {
   AI_ACTIONS,
   AI_ATTACHMENT_MEDIA_TYPES,
   AI_PROMPT_PARAMETER_KINDS,
@@ -360,10 +364,6 @@ export const AiTagSuggestionsRequestSchema = z.object({
   }
 });
 
-export const AiTagSuggestionPromptUpdateSchema = z.object({
-  prompt: z.string().trim().min(1).max(4_000).nullable(),
-});
-
 export const AiPromptTemplateCreateSchema = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().max(200).optional(),
@@ -388,6 +388,31 @@ export const MemoShareUpdateSchema = z.object({
 
 export const NoteBodyFontUpdateSchema = z.object({
   bodyFont: z.enum(["wenkai", "wenkai-screen", "zhuque", "source-han-serif", "neo-zhi-song", "source-han-sans", "source-serif"]).nullable(),
+});
+
+const noteProseHexColor = z.string().regex(/^#[0-9a-f]{6}$/i);
+const noteProseCustomColorSetSchema = z.object({
+  background: noteProseHexColor,
+  text: noteProseHexColor,
+  muted: noteProseHexColor,
+  heading: noteProseHexColor,
+  accent: noteProseHexColor,
+  soft: noteProseHexColor,
+  codeBackground: noteProseHexColor,
+  border: noteProseHexColor,
+});
+
+export const NoteProseUpdateSchema = z.object({
+  fontSize: z.union([z.literal(14), z.literal(16), z.literal(18), z.literal(20)]).nullable().optional(),
+  lineHeight: z.union([z.literal(1.5), z.literal(1.65), z.literal(2)]).nullable().optional(),
+  palette: z.enum(NOTE_PROSE_PALETTE_CHOICES).nullable().optional(),
+  customCss: z.string().refine((value) => new TextEncoder().encode(value).byteLength <= MAX_NOTE_PROSE_CSS_BYTES).nullable().optional(),
+  customColors: z.object({
+    light: noteProseCustomColorSetSchema,
+    dark: noteProseCustomColorSetSchema,
+  }).nullable().optional(),
+}).refine((input) => Object.values(input).some((value) => value !== undefined), {
+  message: "At least one field is required.",
 });
 
 export const PublicShareUnlockSchema = z.object({
@@ -476,7 +501,6 @@ export type AiDefaultModelUpdateInput = z.infer<typeof AiDefaultModelUpdateSchem
 export type AiGenerateInput = z.input<typeof AiGenerateSchema>;
 export type AiAttachmentInput = z.infer<typeof AiAttachmentSchema>;
 export type AiTagSuggestionsRequestInput = z.infer<typeof AiTagSuggestionsRequestSchema>;
-export type AiTagSuggestionPromptUpdateInput = z.infer<typeof AiTagSuggestionPromptUpdateSchema>;
 export type AiPromptTemplateCreateInput = z.input<typeof AiPromptTemplateCreateSchema>;
 export type AiPromptTemplateUpdateInput = z.infer<typeof AiPromptTemplateUpdateSchema>;
 export type MemoShareUpdateInput = z.infer<typeof MemoShareUpdateSchema>;

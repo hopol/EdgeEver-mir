@@ -18,8 +18,16 @@ describe("note sharing menu", () => {
     expect(editorSource).toContain("canShareMemo: Boolean(memo && !readOnly)");
     expect(editorSource).toContain("{!readOnly && (\n                  <DropdownMenuItem");
     expect(editorSource).toContain('{!readOnly && (!mobileEditingActive || isMemoShared) && (');
-    expect(editorSource).toContain('className={cn("h-8 w-8", isMemoShared ? "text-slate-700" : "text-slate-500")}');
+    expect(editorSource).toContain('isMemoShared\n                      ? "bg-[#d4d4d4] text-[#2a2a2a] hover:bg-[#e4e4e4] hover:text-[#2a2a2a]"');
+    expect(editorSource).toContain("aria-pressed={isMemoShared}");
     expect(editorSource).toContain('aria-label={t(isLocalMemoId(memo.id) ? "sharing.afterSync" : isMemoShared ? "sharing.manage" : "sharing.action")}');
+  });
+
+  test("shows a toast after copying the note for other platforms", () => {
+    expect(editorSource).toContain('wechatCopyState === "copied" || wechatCopyState === "error"');
+    expect(editorSource).toContain('t(wechatCopyState === "copied" ? "editor.copiedToWeChat" : "editor.copyToWeChatFailed")');
+    expect(zhCN.editor.copiedToWeChat).toBe("已复制");
+    expect(enUS.editor.copiedToWeChat).toBe("Copied");
   });
 
   test("explains why sharing a newly created local note is disabled", () => {

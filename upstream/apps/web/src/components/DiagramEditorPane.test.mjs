@@ -126,7 +126,8 @@ describe("diagram editor canvas surface", () => {
 
   test("uses the common note header and capability-aware more menu", () => {
     expect(source).toContain("<MemoEditorTopRowLeading");
-    expect(topRowLeadingSource).toContain('<span className="hidden truncate text-xs text-slate-400 sm:inline">{updatedLabel}</span>');
+    expect(topRowLeadingSource).not.toContain("MemoEditorUpdatedLabel");
+    expect(source).not.toContain("formatDateTime(memo.updatedAt)");
     expect(source).not.toContain('t("editor.updatedAt", { time: updatedLabel })');
     expect(source).toContain("onToggleDesktopFocusMode");
     expect(source).not.toContain("onOpenPreviousMemo");
@@ -433,9 +434,22 @@ describe("diagram editor canvas surface", () => {
     expect(source).toContain('graph.startBatch("quick-create")');
   });
 
-  test("keeps the desktop header compact without shrinking mobile controls", () => {
-    expect(source).toContain("MEMO_EDITOR_TOP_ROW_CLASS_NAME");
-    expect(source).toContain("MEMO_EDITOR_TITLE_REGION_CLASS_NAME");
+  test("keeps notebook and tags on the title row above the diagram toolbar", () => {
+    const topRow = source.indexOf('cn(MEMO_EDITOR_TOP_ROW_CLASS_NAME, "border-b-0")');
+    const metadata = source.indexOf("<MemoEditorMetadataRow");
+    const status = source.indexOf("ref={setHeaderStatusCluster}");
+    const headerEnd = source.indexOf("</header>");
+    const toolbar = source.indexOf("<DiagramToolbar\n");
+    expect(topRow).toBeGreaterThan(-1);
+    expect(metadata).toBeGreaterThan(topRow);
+    expect(status).toBeGreaterThan(metadata);
+    expect(headerEnd).toBeGreaterThan(status);
+    expect(toolbar).toBeGreaterThan(headerEnd);
+    expect(source).toContain("rowClassName={MEMO_EDITOR_METADATA_ROW_CLASS_NAME}");
+    expect(source).toContain("nextTitleStatusClearance");
+    expect(source).toContain('cn(MEMO_EDITOR_TOP_ROW_CLASS_NAME, "border-b-0")');
+    expect(source).not.toContain("MEMO_EDITOR_TITLE_REGION_CLASS_NAME");
+    expect(source.match(/<MemoEditorMetadataRow/g)).toHaveLength(1);
     expect(toolbarSource).toContain("<MemoEditorToolbarRow");
   });
 

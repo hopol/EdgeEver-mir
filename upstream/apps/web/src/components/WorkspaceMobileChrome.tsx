@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Boxes, ChevronDown, ChevronRight, FileText, Home, Network, Plus, Presentation, Search, TableProperties, UserRound, Workflow, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Component, FileText, GitFork, Home, PieChart, Plus, Search, Table2, UserRound, Workflow, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -11,6 +11,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
+import { useDeployedUpdateNotice } from "@/hooks/useDeployedUpdateNotice";
 import { BETA_BADGE_CLASSNAME } from "@/lib/workspace-ui";
 import type { NoteCreateKind, Notebook } from "@edgeever/shared";
 import type { MobileBottomNavItem, NotebookNode } from "@/lib/app-helpers";
@@ -26,11 +27,13 @@ const MobileBottomNavButton = ({
   active = false,
   icon,
   label,
+  notice = false,
   onClick,
 }: {
   active?: boolean;
   icon: ReactNode;
   label: string;
+  notice?: boolean;
   onClick: () => void;
 }) => (
   <button
@@ -46,7 +49,10 @@ const MobileBottomNavButton = ({
     onClick={onClick}
   >
     {active ? <span aria-hidden="true" className="absolute top-0 h-0.5 w-5 rounded-full bg-slate-950" /> : null}
-    {icon}
+    <span className="relative">
+      {icon}
+      {notice ? <span className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-2 ring-card" /> : null}
+    </span>
     <span>{label}</span>
   </button>
 );
@@ -67,6 +73,7 @@ export const MobileBottomNav = ({
   onOpenSettings: () => void;
 }) => {
   const { t } = useTranslation();
+  const { unseen: deployedUpdateUnseen } = useDeployedUpdateNotice();
   const createMemoLabel = !canCreateMemo ? t("nav.createDisabled") : isCreating ? t("nav.creating") : t("nav.createMemo");
 
   return (
@@ -94,7 +101,7 @@ export const MobileBottomNav = ({
               <span className="min-w-0 flex-1 truncate">{t("diagram.normalNote")}</span>
             </DropdownMenuItem>
             <DropdownMenuItem className="gap-2 text-xs leading-5" onSelect={() => onCreateMemo("mind-map")}>
-              <Network className="h-4 w-4 shrink-0" />
+              <GitFork className="h-4 w-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{t("diagram.mindMap")}</span>
             </DropdownMenuItem>
             <DropdownMenuItem className="gap-2 text-xs leading-5" onSelect={() => onCreateMemo("flowchart")}>
@@ -102,21 +109,22 @@ export const MobileBottomNav = ({
               <span className="min-w-0 flex-1 truncate">{t("diagram.flowchart")}</span>
             </DropdownMenuItem>
             <DropdownMenuItem className="gap-2 text-xs leading-5" onSelect={() => onCreateMemo("architecture")}>
-              <Boxes className="h-4 w-4 shrink-0" />
+              <Component className="h-4 w-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{t("diagram.architecture")}</span>
             </DropdownMenuItem>
             <DropdownMenuItem className="gap-2 text-xs leading-5" onSelect={() => onCreateMemo("infographic")}>
-              <Presentation className="h-4 w-4 shrink-0" />
+              <PieChart className="h-4 w-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{t("infographic.name")}</span>
+              <span className={BETA_BADGE_CLASSNAME}>Beta</span>
             </DropdownMenuItem>
             <DropdownMenuItem className="gap-2 text-xs leading-5" onSelect={() => onCreateMemo("table")}>
-              <TableProperties className="h-4 w-4 shrink-0" />
+              <Table2 className="h-4 w-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{t("structuredTable.name")}</span>
               <span className={BETA_BADGE_CLASSNAME}>Beta</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <MobileBottomNavButton active={activeItem === "settings"} icon={<UserRound className="h-5 w-5" />} label={t("nav.mine")} onClick={onOpenSettings} />
+        <MobileBottomNavButton active={activeItem === "settings"} icon={<UserRound className="h-5 w-5" />} label={t("nav.mine")} notice={deployedUpdateUnseen} onClick={onOpenSettings} />
       </div>
     </nav>
   );

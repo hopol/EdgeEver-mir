@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AiProvider } from "@edgeever/shared";
-import { ChevronDown, Loader2, Plus, Server, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
+import { ChevronDown, Loader2, Plus, Server, Sparkles, TriangleAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { AiProviderCard } from "@/components/settings/AiProviderCard";
 import {
@@ -11,21 +11,18 @@ import {
   providerDefaults,
 } from "@/components/settings/ai-provider-options";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  SETTINGS_CARD_DESCRIPTION_CLASSNAME,
   SETTINGS_CARD_HEADER_CLASSNAME,
   SETTINGS_CARD_ICON_CLASSNAME,
   SETTINGS_CARD_TITLE_CLASSNAME,
-  SETTINGS_ITEM_DESCRIPTION_CLASSNAME,
   SETTINGS_ITEM_TITLE_CLASSNAME,
 } from "./settings-ui";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -127,7 +124,6 @@ export const AiModelCard = () => {
                   <Sparkles className={SETTINGS_CARD_ICON_CLASSNAME} />
                   {t("aiModel.title")}
                 </CardTitle>
-                <CardDescription className={SETTINGS_CARD_DESCRIPTION_CLASSNAME}>{t("aiModel.description")}</CardDescription>
               </span>
               <ChevronDown className={cn("mt-0.5 h-4 w-4 shrink-0 text-slate-400 transition-transform", expanded && "rotate-180")} />
             </button>
@@ -150,55 +146,41 @@ export const AiModelCard = () => {
                   </p>
                 ) : null}
 
-                <section className="grid gap-2">
-                  <span className="text-xs font-semibold text-slate-500">
-                    {t("aiModel.defaultSettingsTitle")}
-                  </span>
-                  <div className="overflow-hidden rounded-lg border border-slate-200/70 bg-slate-50/50 divide-y divide-slate-200/70">
-                    <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                      <div className="min-w-0">
-                        <div className={SETTINGS_ITEM_TITLE_CLASSNAME}>{t("aiModel.defaultModel")}</div>
-                        <div className={SETTINGS_ITEM_DESCRIPTION_CLASSNAME}>{t("aiModel.defaultModelHint")}</div>
-                      </div>
-                      <div className="w-56 max-w-[60%] shrink-0 sm:w-72">
-                        <Select
-                          value={settings?.defaultModelId ?? "none"}
-                          onValueChange={(value) => defaultMutation.mutate(value === "none" ? null : value)}
-                          disabled={readOnly || defaultMutation.isPending}
-                        >
-                          <SelectTrigger className="h-8 bg-card text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">{t("aiModel.noDefaultModel")}</SelectItem>
-                            {allModels.map((model) => (
-                              <SelectItem key={model.id} value={model.id} disabled={!model.providerEnabled}>
-                                {model.displayName} · {model.providerName}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className={SETTINGS_ITEM_TITLE_CLASSNAME}>{t("aiModel.defaultModel")}</div>
+                    </div>
+                    <div className="w-56 max-w-[60%] shrink-0 sm:w-72">
+                      <Select
+                        value={settings?.defaultModelId ?? "none"}
+                        onValueChange={(value) => defaultMutation.mutate(value === "none" ? null : value)}
+                        disabled={readOnly || defaultMutation.isPending}
+                      >
+                        <SelectTrigger className="h-8 bg-card text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">{t("aiModel.noDefaultModel")}</SelectItem>
+                          {allModels.map((model) => (
+                            <SelectItem key={model.id} value={model.id} disabled={!model.providerEnabled}>
+                              {model.displayName} · {model.providerName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                </section>
-                {!defaultModelAvailable ? (
-                  <p className="flex items-center gap-1.5 text-xs text-amber-700">
-                    <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
-                    {t("aiModel.defaultUnavailable")}
-                  </p>
-                ) : null}
+                  {!defaultModelAvailable ? (
+                    <p className="flex items-center gap-1.5 text-xs text-amber-700">
+                      <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+                      {t("aiModel.defaultUnavailable")}
+                    </p>
+                  ) : null}
+                </div>
 
                 <section className="grid gap-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-slate-500">
-                        {t("aiModel.servicesTitle")}
-                      </span>
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                        {settings?.providers.length ?? 0}
-                      </span>
-                    </div>
+                  <div className="flex items-center justify-end">
                     <DisabledActionTooltip label={!canAddProvider ? addDisabledReason : undefined}>
-                      <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 bg-card text-xs" disabled={!canAddProvider} onClick={openAddDialog}>
+                      <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 bg-card text-xs font-normal" disabled={!canAddProvider} onClick={openAddDialog}>
                         <Plus className="h-3.5 w-3.5" />{t("aiModel.addProvider")}
                       </Button>
                     </DisabledActionTooltip>
@@ -222,19 +204,11 @@ export const AiModelCard = () => {
                   )}
                 </section>
 
-                <div className="flex items-start gap-2 border-t border-slate-200/60 pt-3 ">
-                  <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-900" />
-                  <p className="text-xs leading-relaxed text-slate-500 ">
-                    {t("aiModel.privacyNotice")}
-                  </p>
-                </div>
-
                 <Dialog open={showAdd} onOpenChange={handleAddDialogChange}>
                   <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-2xl">
                     <form className="grid gap-5" onSubmit={(event: FormEvent) => { event.preventDefault(); if (!canAddProvider) return; createMutation.mutate(); }}>
                       <DialogHeader>
-                        <DialogTitle>{t("aiModel.addProvider")}</DialogTitle>
-                        <DialogDescription>{t("aiModel.addProviderDescription")}</DialogDescription>
+                        <DialogTitle className="text-xs font-normal">{t("aiModel.addProvider")}</DialogTitle>
                       </DialogHeader>
                       {!encryptionConfigured ? (
                         <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
@@ -243,11 +217,11 @@ export const AiModelCard = () => {
                       ) : null}
                       <div className="grid gap-4 sm:grid-cols-2">
                         <Field label={t("aiModel.displayName")}>
-                          <Input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required maxLength={80} />
+                          <Input className="h-9 text-xs" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required maxLength={80} />
                         </Field>
                         <Field label={t("aiModel.provider")}>
                           <Select value={provider} onValueChange={(value) => handleProviderChange(value as AiProvider)}>
-                            <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-9 text-xs font-normal"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="openai-compatible">{t("aiModel.providers.openai-compatible")}</SelectItem>
                               <SelectItem value="anthropic">{t("aiModel.providers.anthropic")}</SelectItem>
@@ -256,16 +230,16 @@ export const AiModelCard = () => {
                           </Select>
                         </Field>
                         <div className="sm:col-span-2">
-                          <Field label={t("aiModel.baseUrl")}><Input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} required inputMode="url" /></Field>
+                          <Field label={t("aiModel.baseUrl")}><Input className="h-9 text-xs" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} required inputMode="url" /></Field>
                         </div>
                         <div className="sm:col-span-2">
                           <Field label={t("aiModel.apiKey")} hint={t("aiModel.apiKeyCreateHint")}>
-                            <Input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} required autoComplete="new-password" />
+                            <Input className="h-9 text-xs" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} required autoComplete="new-password" />
                           </Field>
                         </div>
                         <div className="sm:col-span-2">
-                          <Field label={t("aiModel.initialModelId")} hint={t("aiModel.initialModelIdHint")}>
-                            <Input value={initialModelId} onChange={(event) => setInitialModelId(event.target.value)} />
+                          <Field label={t("aiModel.initialModelId")}>
+                            <Input className="h-9 text-xs" value={initialModelId} onChange={(event) => setInitialModelId(event.target.value)} />
                           </Field>
                         </div>
                       </div>
@@ -275,9 +249,9 @@ export const AiModelCard = () => {
                         </p>
                       ) : null}
                       <DialogFooter className="gap-2 sm:space-x-0">
-                        <Button type="button" variant="outline" onClick={() => handleAddDialogChange(false)}>{t("common.cancel")}</Button>
+                        <Button type="button" variant="outline" className="text-xs font-normal" onClick={() => handleAddDialogChange(false)}>{t("common.cancel")}</Button>
                         <DisabledActionTooltip label={!canAddProvider ? addDisabledReason : undefined}>
-                          <Button type="submit" variant="solid" disabled={!canAddProvider || createMutation.isPending}>
+                          <Button type="submit" variant="solid" className="text-xs font-normal" disabled={!canAddProvider || createMutation.isPending}>
                             {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{t("aiModel.createProvider")}
                           </Button>
                         </DisabledActionTooltip>
