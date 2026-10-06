@@ -41,6 +41,7 @@ import { createRendererStartupGuard } from "./renderer-startup-guard.mjs";
 import { waitForChildProcessSpawn } from "./child-process-start.mjs";
 import { ScheduledTaskScheduler } from "./scheduled-task-scheduler.mjs";
 import { desktopMenuCopy } from "./desktop-menu.mjs";
+import { buildEditContextMenuTemplate } from "./edit-context-menu.mjs";
 import {
   fetchTrustedWindowsUpdate,
   verifyDownloadedWindowsUpdate,
@@ -782,8 +783,22 @@ const buildApplicationMenu = () => {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 };
 
-const createTray = () => {
+const buildTrayContextMenu = () => {
   const copy = desktopMenuCopy(app.getLocale());
+  return Menu.buildFromTemplate([
+    { label: copy.show, click: () => showWindow(mainWindow) },
+    { label: copy.screenshotToNote, click: () => void captureScreenshotToNote() },
+    ...(updateState === "downloaded" ? [{ label: copy.restartToUpdate, click: () => installDownloadedUpdate() }] : []),
+    { type: "separator" },
+    { label: copy.quit, click: () => { isQuitting = true; app.quit(); } },
+  ]);
+};
+
+const createTray = () => {
+  if (tray && !tray.isDestroyed?.()) {
+    tray.setContextMenu(buildTrayContextMenu());
+    return;
+  }
   const iconPath = trayIconPath({
     isPackaged: app.isPackaged,
     platform: process.platform,
@@ -794,13 +809,7 @@ const createTray = () => {
   if (process.platform === "darwin") icon.setTemplateImage(true);
   tray = new Tray(icon);
   tray.setToolTip("EdgeEver");
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: copy.show, click: () => showWindow(mainWindow) },
-    { label: copy.screenshotToNote, click: () => void captureScreenshotToNote() },
-    ...(updateState === "downloaded" ? [{ label: copy.restartToUpdate, click: () => installDownloadedUpdate() }] : []),
-    { type: "separator" },
-    { label: copy.quit, click: () => { isQuitting = true; app.quit(); } },
-  ]));
+  tray.setContextMenu(buildTrayContextMenu());
   tray.on("double-click", () => showWindow(mainWindow));
 };
 
@@ -999,9 +1008,12 @@ const preparePackagedRendererOrigin = async () => {
 };
 
 const refreshTrayMenu = () => {
-  if (!tray) return;
-  tray.destroy();
-  createTray();
+  if (isQuitting) return;
+  if (!tray || tray.isDestroyed?.()) {
+    createTray();
+    return;
+  }
+  tray.setContextMenu(buildTrayContextMenu());
 };
 
 const desktopUpdateStatus = () => ({
@@ -1304,6 +1316,22 @@ const scheduleSidecarRestart = () => {
   }, delayMs);
 };
 
+// Restores the standard browser editing menu (Cut/Copy/Paste/Paste as plain
+// text/Select all, spelling suggestions, Copy link address). Pages that call
+// preventDefault() on the DOM contextmenu event never reach this handler.
+const attachEditContextMenu = (contents) => {
+  contents.on("context-menu", (_event, params) => {
+    const template = buildEditContextMenuTemplate(params, desktopMenuCopy(app.getLocale()), {
+      replaceMisspelling: (word) => contents.replaceMisspelling(word),
+      addToDictionary: (word) => contents.session.addWordToSpellCheckerDictionary(word),
+      copyLink: (url) => clipboard.writeText(url),
+    });
+    if (!template.length) return;
+    const window = BrowserWindow.fromWebContents(contents) ?? undefined;
+    Menu.buildFromTemplate(template).popup(window ? { window } : {});
+  });
+};
+
 const createWindow = async () => {
   const state = await readWindowState();
   mainWindow = new BrowserWindow({
@@ -1332,6 +1360,8 @@ const createWindow = async () => {
       mainWindow.hide();
     }
   });
+  attachEditContextMenu(mainWindow.webContents);
+  mainWindow.webContents.on("did-create-window", (childWindow) => attachEditContextMenu(childWindow.webContents));
   mainWindow.on("hide", syncRendererHibernate);
   mainWindow.on("show", syncRendererHibernate);
   mainWindow.on("minimize", syncRendererHibernate);

@@ -1,32 +1,29 @@
 {
-  "version": "1.95.0",
+  "version": "1.100.0",
   "changes": {
     "en-US": [
-      "Structured tables can now be created and edited through MCP, including table schemas and record operations.",
-      "Note body colors have been refined. The removed Plum palette in saved settings falls back to the default appearance.",
-      "The local Agent now supports Claude Code, OpenClaw, and Hermes. Compatible agents can access notes for the current session; note context is optional, generated images are kept locally, and activity and settings are clearer.",
-      "Copying notes for publishing now shows progress, and copying to WeChat preserves LaTeX formulas.",
-      "Infographics can be generated from the AI sidebar and exported as readable images.",
-      "Changing a password now works from an existing desktop sign-in session.",
-      "The note menu is simpler, with theme and repository rows removed."
+      "Create top-level or nested notebooks directly in the Android and iOS apps.",
+      "AI-created notes open in the workspace, while new flowcharts and mind maps use improved default themes and simpler editing controls.",
+      "Architecture diagrams now lay out dense relationships more clearly, with arrows routed to node borders and around other nodes.",
+      "Markdown caret alignment and the trash action target are corrected, with refreshed platform icons.",
+      "The Best Practices guide adds AI diagram and infographic workflows and clearer navigation.",
+      "Support and partnership guides now offer direct sponsorship options and updated community links."
     ],
     "zh-CN": [
-      "现在可以通过 MCP 创建和编辑结构化表格，包括表结构与记录的增删改查。",
-      "笔记正文配色已调整；此前保存的梅红配色会回退为默认外观。",
-      "本机 Agent 新增 Claude Code、OpenClaw 和 Hermes 支持。兼容的 Agent 可在当前会话访问笔记；当前笔记上下文可选，生成的图片会保存在本机，活动和设置显示也更清楚。",
-      "复制笔记用于发布时会显示进度；复制到微信时会保留 LaTeX 公式。",
-      "现在可以在 AI 侧栏生成信息图，并将其导出为清晰易读的图片。",
-      "使用现有桌面端登录会话时，现在可以正常修改密码。",
-      "笔记菜单移除了主题和仓库条目，内容更简洁。"
+      "Android 与 iOS 现可直接创建顶层或子笔记本。",
+      "AI 创建的笔记可直接在工作区打开；新流程图和思维导图采用更合适的默认主题，编辑操作也更清晰。",
+      "架构图中的密集关系更易辨认，连线会贴合节点边缘并绕开其他节点。",
+      "修正 Markdown 光标与删除操作的点击位置，并更新平台图标。",
+      "最佳实践指南新增 AI 图表与信息图流程，并优化导航。",
+      "赞助与合作指南现提供直接支持方式，并更新社区入口。"
     ],
     "ja": [
-      "MCP から構造化テーブルのスキーマとレコードを作成・編集できるようになりました。",
-      "ノート本文の配色を調整しました。保存済みの Plum 配色は標準の外観に戻ります。",
-      "ローカル Agent が Claude Code、OpenClaw、Hermes に対応しました。対応する Agent は現在のセッションでノートにアクセスでき、ノート文脈は任意です。生成画像はローカルに保存され、操作状況と設定も見やすくなりました。",
-      "公開用にノートをコピーすると進行状況が表示され、微信へのコピーでは LaTeX 数式が保持されます。",
-      "AI サイドバーからインフォグラフィックを生成し、読みやすい画像として書き出せます。",
-      "既存のデスクトップのログインセッションからパスワードを変更できるようになりました。",
-      "ノートメニューからテーマとリポジトリの項目を外し、表示を簡潔にしました。"
+      "Android と iOS アプリから最上位または子ノートブックを直接作成できます。",
+      "AI が作成したノートをワークスペースで開けます。新しいフローチャートとマインドマップの既定テーマと編集操作も改善しました。",
+      "構成図の密集した関係を見やすくし、矢印がノードの境界に接続して他のノードを避けるようにしました。",
+      "Markdown のカーソル位置と削除操作のクリック位置を修正し、プラットフォームアイコンを更新しました。",
+      "ベストプラクティスガイドに AI 図表とインフォグラフィックの手順を追加し、ナビゲーションを改善しました。",
+      "支援・パートナーシップガイドに直接支援する方法を追加し、コミュニティへのリンクを更新しました。"
     ]
   }
 }

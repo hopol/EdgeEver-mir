@@ -133,10 +133,11 @@ interface EdgeEverDesktopBridge {
     prompt: string;
     contextText?: string;
     attachments?: Array<{ filename: string; mediaType: string; dataBase64: string }>;
+    noteAccess?: boolean;
   }): Promise<{ requestId: string; rejectedAttachments?: Array<{ filename: string; reason: string }> }>;
   cancelAcp?(requestId: string): Promise<{ ok: true }>;
   onAcpEvent?(callback: (event:
-    | { requestId: string; type: "text-delta"; text: string }
+    | { requestId: string; type: "text-delta"; text: string; messageId?: string }
     | { requestId: string; type: "reasoning"; text: string }
     | { requestId: string; type: "tool"; name: string; status: string; title?: string }
     | { requestId: string; type: "image"; id: string; mediaType: string; base64: string }
