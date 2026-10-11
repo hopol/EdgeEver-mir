@@ -1,4 +1,5 @@
 import {
+  clipNotebookId,
   edgeEverFormRequest,
   edgeEverRequest,
   getInstanceOrigin,
@@ -24,6 +25,13 @@ import {
   type StoredImage,
   type StoredImageFailure,
 } from "./image-clip";
+import {
+  embedPageImages,
+  pageImageRefs,
+  readBodyWithLimit,
+  readPageImageInPage,
+  type PageImageDownload,
+} from "./page-images";
 import {
   githubRepoFactsFromSource,
   githubRepoNoteMarkdown,
@@ -81,6 +89,15 @@ import {
 import type { OutlineAttempt, VideoNoteToast } from "./video/types";
 import { youtubeCaptureFromRead, youtubeTargetFromUrl } from "./video/youtube";
 import { t } from "./i18n";
+import {
+  isPlatformClip,
+  markdownText,
+  markdownUrl,
+  PLATFORM_MENUS,
+  platformTarget,
+  publishedTimeText,
+  type PlatformTarget,
+} from "./platform-clip";
 
 type CapturedPage = {
   title: string;
@@ -181,21 +198,23 @@ const describeSaveError = (error: unknown) => {
 
 const notebookForClip = async (settings: ExtensionSettings) => {
   const notebooks = await listNotebooks(settings);
-  const notebookId = settings.notebookId || notebooks.notebooks[0]?.id;
+  const notebookId = clipNotebookId(settings.notebookId, notebooks.notebooks);
   if (!notebookId) throw new Error(t("noAvailableNotebooks"));
   return notebookId;
 };
 
-const createMemo = async (settings: ExtensionSettings, page: CapturedPage) => {
-  await edgeEverRequest(settings, "/api/v1/memos", {
+const createMemo = async (settings: ExtensionSettings, page: CapturedPage, tabId: number | null) => {
+  const contentMarkdown = toMarkdown(page);
+  const created = await edgeEverRequest<{ memo?: CreatedClipMemo }>(settings, "/api/v1/memos", {
     method: "POST",
     body: JSON.stringify({
       notebookId: await notebookForClip(settings),
       title: page.title,
-      contentMarkdown: toMarkdown(page),
+      contentMarkdown,
       tags: ["web-clip"],
     }),
   });
+  await embedClipImages(settings, created.memo, contentMarkdown, page.url, tabId, null);
 };
 
 const createGithubRepoMemo = async (settings: ExtensionSettings, facts: GithubRepoFacts) => {
@@ -230,8 +249,8 @@ const imageNoteClient = (settings: ExtensionSettings): ImageNoteClient => ({
     method: "POST",
     body: JSON.stringify(body),
   }),
-  uploadImage: async (memoId, file) => {
-    const uploaded = await uploadMemoImage(settings, memoId, file);
+  uploadImage: async (memoId, file, signal) => {
+    const uploaded = await uploadMemoImage(settings, memoId, file, signal);
     return uploaded.resource;
   },
   createEditSession: (memoId) => edgeEverRequest(
@@ -345,7 +364,7 @@ const persistImage = async (
 ) => {
   try {
     await saveCapturedImageNote(imageNoteClient(settings), {
-      notebookId: settings.notebookId,
+      notebookId: await notebookForClip(settings),
       title: noteTitleForImage(context.pageTitle, context.alt, t("imageNoteFallbackTitle")),
       alt: context.alt,
       filename: filenameForImage(context.srcUrl, image.mimeType),
@@ -367,21 +386,36 @@ const persistImage = async (
   }
 };
 
-const downloadImage = async (urls: string[]): Promise<StoredImage | StoredImageFailure> => {
+const requestSignal = (timeoutMs: number, signal?: AbortSignal) => {
+  if (!signal) return AbortSignal.timeout(timeoutMs);
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  const timer = setTimeout(abort, timeoutMs);
+  controller.signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
+  if (signal.aborted) abort();
+  else signal.addEventListener("abort", abort, { once: true });
+  return controller.signal;
+};
+
+const downloadImage = async (
+  urls: string[],
+  { maxBytes = MAX_IMAGE_BYTES, timeoutMs = 15000, signal }: { maxBytes?: number; timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<StoredImage | StoredImageFailure> => {
   const matchUrl = urls[urls.length - 1] ?? "";
   let matchError: StoredImageFailure["error"] | "" = "";
   for (const url of urls) {
     if (!/^https?:/i.test(url)) continue;
     for (const credentials of ["omit", "include"] as const) {
+      if (signal?.aborted) return { error: "unreadable" };
       try {
-        const response = await fetch(url, { credentials });
+        const response = await fetch(url, { credentials, signal: requestSignal(timeoutMs, signal) });
         if (!response.ok) continue;
-        const declared = Number(response.headers.get("content-length"));
-        if (Number.isFinite(declared) && declared > MAX_IMAGE_BYTES) {
+        const bytes = await readBodyWithLimit(response, maxBytes);
+        if (!bytes) {
           if (url === matchUrl) matchError = "too-large";
           continue;
         }
-        const image = imageFromBytes(new Uint8Array(await response.arrayBuffer()), response.headers.get("content-type") ?? "");
+        const image = imageFromBytes(bytes, response.headers.get("content-type") ?? "");
         if (!("error" in image)) return image;
         if (url === matchUrl) matchError = image.error;
       } catch {
@@ -391,6 +425,59 @@ const downloadImage = async (urls: string[]): Promise<StoredImage | StoredImageF
   }
   if (matchError === "too-large" || matchError === "unsupported") return { error: matchError };
   return { error: "unreadable" };
+};
+
+type CreatedClipMemo = { id?: string; revision?: number; contentHash?: string };
+
+const downloadPageImage = (tabId: number | null, frameId: number | null): PageImageDownload =>
+  async (image, { maxBytes, timeoutMs, signal }) => {
+    const file = await downloadImage([image.url], { maxBytes, timeoutMs, signal });
+    if (!("error" in file)) return file;
+    if (tabId === null || signal.aborted) return null;
+    try {
+      const [injection] = await chrome.scripting.executeScript({
+        target: scriptTarget(tabId, frameId),
+        func: readPageImageInPage,
+        args: [image.url, maxBytes, timeoutMs],
+      });
+      const read: unknown = injection?.result;
+      if (!read || typeof read !== "object") return null;
+      const { base64, type } = read as { base64?: unknown; type?: unknown };
+      if (typeof base64 !== "string") return null;
+      const fromPage = imageFromBase64(base64, typeof type === "string" ? type : "");
+      return "error" in fromPage ? null : fromPage;
+    } catch {
+      // The page cannot be scripted; this image keeps its remote address.
+      return null;
+    }
+  };
+
+const embedClipImages = async (
+  settings: ExtensionSettings,
+  memo: CreatedClipMemo | undefined,
+  markdown: string,
+  pageUrl: string,
+  tabId: number | null,
+  frameId: number | null,
+) => {
+  // Count all remote images, including those beyond the transfer cap. The new
+  // platform path uses this result to report partial archival honestly.
+  const images = pageImageRefs(markdown, pageUrl, Number.POSITIVE_INFINITY);
+  const unchanged = { embedded: 0, total: images.length };
+  if (!memo?.id || typeof memo.revision !== "number" || typeof memo.contentHash !== "string" || images.length === 0) return unchanged;
+  try {
+    return await embedPageImages(imageNoteClient(settings), {
+      memoId: memo.id,
+      markdown,
+      created: { revision: memo.revision, contentHash: memo.contentHash },
+      images,
+      download: downloadPageImage(tabId, frameId),
+    });
+  } catch {
+    // The note is already saved; reporting a failure here would invite a
+    // duplicate save. Its images keep their remote addresses.
+    return unchanged;
+  }
 };
 
 const hasImagePermission = async (urls: string[]) => {
@@ -469,6 +556,11 @@ let pendingCapture: ((page: CapturedPage) => void) | null = null;
 const pendingImageReads = new Map<string, (result: unknown) => void>();
 const pendingTweetReads = new Map<string, (result: unknown) => void>();
 const pendingGithubReads = new Map<string, (result: unknown) => void>();
+const pendingPlatformReads = new Map<string, {
+  tabId: number;
+  target: PlatformTarget;
+  resolve: (result: unknown) => void;
+}>();
 const pendingXhsReads = new Map<string, (result: unknown) => void>();
 const pendingZhihuReads = new Map<string, (result: unknown) => void>();
 const pendingRedditReads = new Map<string, (result: unknown) => void>();
@@ -706,7 +798,7 @@ const saveTweetFromMenu = async (
       if (stored) images.push(stored);
     }
     await saveCapturedTweetNote(imageNoteClient(settings), {
-      notebookId: settings.notebookId,
+      notebookId: await notebookForClip(settings),
       title: tweetNoteTitle({ ...tweet, fallback: t("tweetNoteFallbackTitle") }),
       displayName: tweet.displayName,
       handle: tweet.handle,
@@ -831,7 +923,7 @@ const saveXhsFromMenu = async (
       if (stored) images.push(stored);
     }
     await saveCapturedXhsNote(imageNoteClient(settings), {
-      notebookId: settings.notebookId,
+      notebookId: await notebookForClip(settings),
       title: xhsNoteTitle({ ...note, fallback: t("xhsNoteFallbackTitle") }),
       nickname: note.nickname,
       noteTitle: note.title,
@@ -937,7 +1029,7 @@ const saveLocatedZhihu = async (
   }
   await saveCapturedZhihuNote(imageNoteClient(settings), {
     kind: note.kind,
-    notebookId: settings.notebookId,
+    notebookId: await notebookForClip(settings),
     title: zhihuNoteTitle({
       title: note.title,
       author: note.author,
@@ -1062,7 +1154,7 @@ const saveRedditFromMenu = async (
       if (stored) images.push({ ...stored, url: image.url });
     }
     await saveCapturedRedditPost(imageNoteClient(settings), post, {
-      notebookId: settings.notebookId,
+      notebookId: await notebookForClip(settings),
       sourceLabel: t("sourceLabel"),
       capturedAtLabel: t("capturedAtLabel"),
       timeLabel: t("tweetTimeLabel"),
@@ -1188,6 +1280,102 @@ const saveGithubRepoFromMenu = async (
   }
 };
 
+const platformReadErrors = {
+  "not-target": "platformNotDetail",
+  unreadable: "platformUnreadable",
+  changed: "platformPageChanged",
+} as const;
+
+const describePlatformError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : "";
+  if (Object.values(platformReadErrors).some((key) => message === t(key))) return message;
+  return describeGithubError(error);
+};
+
+const readPlatformFromPage = async (tabId: number, target: PlatformTarget, selectionFirst: boolean) => {
+  const requestId = crypto.randomUUID();
+  return new Promise<unknown>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      pendingPlatformReads.delete(requestId);
+      reject(new Error(t("captureTimeout")));
+    }, 10_000);
+    pendingPlatformReads.set(requestId, { tabId, target, resolve: (result) => {
+      clearTimeout(timeout);
+      pendingPlatformReads.delete(requestId);
+      resolve(result);
+    } });
+    const inject = async () => {
+      await chrome.scripting.executeScript({
+        target: { tabId, frameIds: [0] },
+        func: (payload: unknown) => {
+          (globalThis as { __edgeeverPlatformClipPayload?: unknown }).__edgeeverPlatformClipPayload = payload;
+        },
+        args: [{ requestId, url: target.url, selectionFirst }],
+      });
+      await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, files: ["assets/capture-platform.js"] });
+    };
+    void inject().catch((error: unknown) => {
+      clearTimeout(timeout);
+      pendingPlatformReads.delete(requestId);
+      reject(new Error(describeCaptureError(error)));
+    });
+  });
+};
+
+const performPlatformSave = async (tabId: number, pageUrl: string, selectionFirst: boolean) => {
+  const target = platformTarget(pageUrl);
+  if (!target) throw new Error(t("platformNotDetail"));
+  const settings = await ensureClipperReady();
+  const result = await readPlatformFromPage(tabId, target, selectionFirst);
+  if (!result || typeof result !== "object") throw new Error(t("platformUnreadable"));
+  const record = result as { ok?: unknown; reason?: unknown; clip?: unknown; selection?: unknown };
+  if (record.ok !== true) {
+    const key = typeof record.reason === "string" && Object.hasOwn(platformReadErrors, record.reason)
+      ? platformReadErrors[record.reason as keyof typeof platformReadErrors] : "platformUnreadable";
+    throw new Error(t(key));
+  }
+  const clip = isPlatformClip(record.clip, target) ? record.clip : null;
+  const selection = selectionFirst && isCapturedPage(record.selection) && record.selection.kind === "selection"
+    && record.selection.url === target.url && record.selection.markdown.trim() ? record.selection : null;
+  if (!clip && !selection) throw new Error(t("platformUnreadable"));
+  const capturedAt = new Date().toISOString();
+  const contentMarkdown = clip ? [
+    `# ${markdownText(clip.title)}`,
+    clip.author ? `${t("platformAuthorLabel")}: ${markdownText(clip.author)}` : "",
+    clip.publishedAt ? `${t("platformPublishedAtLabel")}: ${markdownText(publishedTimeText(clip.publishedAt, t("platformRelativeTimeLabel")))}` : "",
+    `${t("sourceLabel")}: [${markdownText(clip.url)}](${markdownUrl(clip.url)})`,
+    `${t("capturedAtLabel")}: ${capturedAt}`,
+    "---", clip.markdown,
+  ].filter(Boolean).join("\n\n") : toMarkdown(selection!);
+  const notebookId = await notebookForClip(settings);
+  // Notebook lookup and capture can both outlive a navigation. Bind the save
+  // to the detail page the user clicked.
+  const current = await chrome.tabs.get(tabId);
+  if (platformTarget(current.url || "")?.url !== target.url) throw new Error(t("platformPageChanged"));
+  const created = await edgeEverRequest<{ memo?: CreatedClipMemo }>(settings, "/api/v1/memos", {
+    method: "POST",
+    body: JSON.stringify({ notebookId, title: (clip?.title || selection!.title).slice(0, 120), contentMarkdown, tags: clip?.tags || ["web-clip"] }),
+  });
+  const images = await embedClipImages(settings, created.memo, contentMarkdown, target.url, tabId, 0);
+  const message = images.embedded < images.total ? t("platformImagesPartial")
+    : images.total > 0 ? t("platformSavedWithImages") : t("savedToEdgeEver");
+  return { ok: true, message };
+};
+
+const savePlatformFromMenu = async (info: { pageUrl?: string; frameId?: number }, tab?: { id?: number; url?: string }) => {
+  const tabId = typeof tab?.id === "number" ? tab.id : null;
+  try {
+    if (tabId === null || (info.frameId ?? 0) !== 0) throw new Error(t("platformNotDetail"));
+    await showFeedback(tabId, 0, t("savingPlatformClip"), "success");
+    const result = await performPlatformSave(tabId, info.pageUrl || tab?.url || "", false);
+    await showFeedback(tabId, 0, result.message, "success");
+  } catch (error) {
+    const message = describePlatformError(error);
+    if (message === t("completePluginConfiguration") || message === t("instancePermissionRequired")) await chrome.runtime.openOptionsPage();
+    await showFeedback(tabId, 0, message, "error");
+  }
+};
+
 const isCapturedPage = (value: unknown): value is CapturedPage => {
   if (!value || typeof value !== "object") return false;
   const record = value as Partial<CapturedPage>;
@@ -1270,21 +1458,24 @@ const saveSelectionFromMenu = async (
     const markdown = fromSelection?.markdown.trim() || browserSelection;
     const plain = fromSelection?.plainText?.trim() || browserSelection || markdown;
     if (!markdown.trim()) throw new Error(t("selectionEmpty"));
-    await edgeEverRequest(settings, "/api/v1/memos", {
+    const sourceUrl = fromSelection?.url || pageUrl;
+    const contentMarkdown = selectionNoteMarkdown({
+      markdown,
+      pageUrl: sourceUrl,
+      capturedAt: new Date().toISOString(),
+      sourceLabel: t("sourceLabel"),
+      capturedAtLabel: t("capturedAtLabel"),
+    });
+    const created = await edgeEverRequest<{ memo?: CreatedClipMemo }>(settings, "/api/v1/memos", {
       method: "POST",
       body: JSON.stringify({
         notebookId: await notebookForClip(settings),
         title: selectionNoteTitle(plain, pageTitle, t("selectionNoteFallbackTitle")),
-        contentMarkdown: selectionNoteMarkdown({
-          markdown,
-          pageUrl: fromSelection?.url || pageUrl,
-          capturedAt: new Date().toISOString(),
-          sourceLabel: t("sourceLabel"),
-          capturedAtLabel: t("capturedAtLabel"),
-        }),
+        contentMarkdown,
         tags: ["web-clip"],
       }),
     });
+    await embedClipImages(settings, created.memo, contentMarkdown, sourceUrl, tabId, frameId);
     await showFeedback(tabId, frameId, t("selectionSaved"), "success");
   } catch (error) {
     const message = describeSelectionError(error);
@@ -1515,11 +1706,23 @@ const createClipMenus = () => {
   }, () => {
     void chrome.runtime.lastError;
   });
+  for (const menu of PLATFORM_MENUS) {
+    chrome.contextMenus.create({
+      id: menu.id,
+      title: t(menu.title),
+      contexts: ["page"],
+      documentUrlPatterns: [...menu.patterns],
+    }, () => { void chrome.runtime.lastError; });
+  }
 };
 
 chrome.runtime.onInstalled.addListener(registerClipMenus);
 
 chrome.contextMenus.onClicked.addListener((info: { menuItemId?: string | number; srcUrl?: string; pageUrl?: string; linkUrl?: string; frameId?: number; selectionText?: string }, tab?: { id?: number; url?: string; title?: string }) => {
+  if (PLATFORM_MENUS.some((menu) => menu.id === info.menuItemId)) {
+    void enqueueClip(() => savePlatformFromMenu(info, tab));
+    return;
+  }
   if (info.menuItemId === SELECTION_MENU_ID) {
     void enqueueClip(() => saveSelectionFromMenu(info, tab));
     return;
@@ -1571,6 +1774,14 @@ chrome.windows.onRemoved.addListener((windowId: number) => {
 });
 
 chrome.runtime.onMessage.addListener((message: { type?: string; page?: CapturedPage; requestId?: string; result?: unknown }, _sender: unknown, sendResponse: (response: unknown) => void) => {
+  if (message.type === "pagePlatformRead" && message.requestId) {
+    const pending = pendingPlatformReads.get(message.requestId);
+    const sender = _sender as { id?: string; tab?: { id?: number }; frameId?: number; url?: string } | undefined;
+    if (pending && sender && sender.id === chrome.runtime.id && sender.tab?.id === pending.tabId && sender.frameId === 0) {
+      pending.resolve(platformTarget(sender.url || "")?.url === pending.target.url ? message.result : { ok: false, reason: "changed" });
+    }
+    return false;
+  }
   if (message.type === "capturedPage" && message.page) {
     pendingCapture?.(message.page);
     pendingCapture = null;
@@ -1723,6 +1934,14 @@ chrome.runtime.onMessage.addListener((message: { type?: string; page?: CapturedP
         }
 
         const pageUrl = tab.url || "";
+        if (platformTarget(pageUrl)) {
+          try {
+            sendResponse(await enqueueClip(() => performPlatformSave(tab.id, pageUrl, true)));
+          } catch (error) {
+            sendResponse({ ok: false, message: describePlatformError(error) });
+          }
+          return;
+        }
         if (youtubeTargetFromUrl(pageUrl) || bilibiliTargetFromUrl(pageUrl)) {
           const result = await enqueueClip(() => performVideoSave(settings, tab.id, null, pageUrl));
           sendResponse(result.created ? { ok: true, message: result.message } : { ok: false, message: result.message });
@@ -1752,7 +1971,7 @@ chrome.runtime.onMessage.addListener((message: { type?: string; page?: CapturedP
         }
 
         const page = await readCapturedPage(tab.id, null, "page");
-        await createMemo(settings, page);
+        await createMemo(settings, page, tab.id);
         sendResponse({ ok: true });
       } catch (error) {
         const message = error instanceof Error ? error.message : "";
