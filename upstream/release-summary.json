@@ -1,29 +1,26 @@
 {
-  "version": "1.109.0",
+  "version": "1.120.0",
   "changes": {
     "en-US": [
-      "Refresh note image sharing with refined themes, theme-matched typography, monogram avatars, and a streamlined preview.",
-      "Android fullscreen note images now support pinch zoom and dragging to inspect details (#520).",
-      "Make poster editing more reliable by avoiding false save and draft recovery conflicts, improving editor startup, and consolidating zoom controls.",
-      "Keep the AI assistant launcher consistently positioned across note editors.",
-      "Restore the all-notes view when the selected notebook is deleted from another client.",
-      "Improve WorkBuddy login checks so unusable saved credentials are reported instead of appearing connected."
+      "Duplicate a note together with independent copies of its images and attachments from the note actions menu.",
+      "Refine note image sharing with curated layouts, coordinated typography and neutral colors for the white theme.",
+      "Expand Web Clipper support for article and specialized platforms, including WeChat, Juejin, Douban, Jike and BOSS Zhipin, with improved content and image capture.",
+      "Pasted links no longer include adjacent Chinese, Japanese or Korean prose.",
+      "Improve desktop AI process cleanup by waiting for process closure before removing temporary workspaces."
     ],
     "zh-CN": [
-      "升级笔记图片分享：精修主题、支持跟随主题的字体、字母头像，并简化预览操作。",
-      "Android 笔记图片全屏后支持双指缩放和拖动，便于查看大图细节（#520）。",
-      "提升海报编辑可靠性：避免误报保存及草稿恢复冲突，改善编辑器启动，并统一缩放操作。",
-      "统一各类笔记编辑器中 AI 助手入口的位置与间距。",
-      "选中的笔记本被其他客户端删除后，自动恢复全部笔记列表。",
-      "改善 WorkBuddy 登录检查，避免不可用的已保存凭据被误显示为连接成功。"
+      "支持从笔记操作菜单复制笔记，同时独立复制图片与附件。",
+      "优化笔记图片分享的主题排版与字体搭配，并修正白色主题的配色。",
+      "扩展网页剪藏对微信公众号、掘金、豆瓣、即刻、BOSS 直聘等文章及垂直平台的支持，改善正文和图片采集。",
+      "修复粘贴链接时将相邻中日韩文字误识别为网址的问题。",
+      "改善桌面 AI 进程清理，等待进程完全关闭后再清理临时工作区。"
     ],
     "ja": [
-      "ノートの画像共有に洗練されたテーマ、テーマに合わせたフォント、イニシャルアイコン、使いやすいプレビューを追加しました。",
-      "Android の全画面画像でピンチズームとドラッグに対応し、細部を確認しやすくしました（#520）。",
-      "ポスター編集の保存・下書き復元時の誤った競合を修正し、起動とズーム操作を改善しました。",
-      "各ノート編集画面で AI アシスタントの位置と間隔を統一しました。",
-      "選択中のノートブックが別の端末で削除された場合、すべてのノート一覧に戻るよう修正しました。",
-      "WorkBuddy のログイン確認を改善し、使用できない保存済み認証情報を接続成功と表示する問題を修正しました。"
+      "ノート操作メニューから、画像と添付ファイルの独立したコピーを含むノートの複製に対応しました。",
+      "ノート画像共有のレイアウトと書体の組み合わせを改善し、白いテーマの配色を調整しました。",
+      "Web ClipperのWeChat、Juejin、Douban、Jike、BOSS Zhipinなどの記事・専門プラットフォームへの対応を拡張し、本文と画像の取得を改善しました。",
+      "リンク貼り付け時に隣接する中国語・日本語・韓国語の文章をURLに含める問題を修正しました。",
+      "デスクトップAIプロセスの終了を待ってから一時ワークスペースを削除するよう改善しました。"
     ]
   }
 }

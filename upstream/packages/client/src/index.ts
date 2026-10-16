@@ -34,6 +34,8 @@ import type {
   MemoRevision,
   MemoSummary,
   MemoShare,
+  NotebookShare,
+  PublicNotebookShare,
   ManagedMemoShare,
   PublicTableForm,
   TableFormSettings,
@@ -180,6 +182,11 @@ export type ListTagsResponse = {
 export type ListApiTokensResponse = {
   apiTokens: ApiToken[];
   availableScopes: string[];
+};
+
+export type InstanceStorageUsageResponse = {
+  summary: ResourceStorageSummary;
+  users: { userId: string; summary: ResourceStorageSummary }[];
 };
 
 export type ListUsersResponse = {
@@ -832,6 +839,19 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
 
     getSession: () => request<AuthSession>("/api/v1/auth/session"),
 
+    getPublicNotebookShare: (token: string) =>
+      request<{ share: PublicNotebookShare }>(`/api/public/notebook-shares/${encodeURIComponent(token)}`),
+    getPublicNotebookMemo: (token: string, memoId: string) =>
+      request<{ share: PublicMemoShare; memoUrls: Record<string, string> }>(`/api/public/notebook-shares/${encodeURIComponent(token)}/memos/${encodeURIComponent(memoId)}`),
+    unlockPublicNotebookShare: (token: string, password: string) =>
+      request<{ ok: true }>(`/api/public/notebook-shares/${encodeURIComponent(token)}/unlock`, { method: "POST", body: JSON.stringify({ password }) }),
+    updateNotebookShare: (id: string, input: { passwordProtected: boolean }) =>
+      request<{ share: NotebookShare }>(`/api/v1/notebooks/${encodeURIComponent(id)}/share`, { method: "PATCH", body: JSON.stringify(input) }),
+    listNotebookShares: () => request<{ shares: NotebookShare[] }>("/api/v1/notebook-shares"),
+    getNotebookShare: (id: string) => request<{ share: NotebookShare | null }>(`/api/v1/notebooks/${encodeURIComponent(id)}/share`),
+    createNotebookShare: (id: string) => request<{ share: NotebookShare }>(`/api/v1/notebooks/${encodeURIComponent(id)}/share`, { method: "POST" }),
+    revokeNotebookShare: (id: string) => request<{ ok: true }>(`/api/v1/notebooks/${encodeURIComponent(id)}/share`, { method: "DELETE" }),
+
     getPublicMemoShare: (token: string) =>
       request<PublicMemoShareResponse>(`/api/public/shares/${encodeURIComponent(token)}`),
 
@@ -1268,6 +1288,8 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
 
     listUsers: () => request<ListUsersResponse>("/api/v1/users"),
 
+    getInstanceStorageUsage: () => request<InstanceStorageUsageResponse>("/api/v1/instance/storage-usage"),
+
     createUser: (payload: { username: string; displayName?: string | null; password: string }) =>
       request<UserResponse>("/api/v1/users", {
         method: "POST",
@@ -1452,10 +1474,10 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
       body: JSON.stringify(payload),
     }),
 
-    useTemplate: (templateId: string, notebookId: string) =>
+    useTemplate: (templateId: string, notebookId: string, locale?: string) =>
       request<MemoResponse>(`/api/v1/templates/${templateId}/use`, {
         method: "POST",
-        body: JSON.stringify({ notebookId }),
+        body: JSON.stringify(locale ? { notebookId, locale } : { notebookId }),
       }),
 
     deleteTemplate: (templateId: string) =>
@@ -1826,6 +1848,8 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
       });
     },
 
+    claimPosterRender: () => request<{ job: null | { id: string; memoId: string; expectedRevision: number; templateId: string | null; claimToken: string; expiresAt: string } }>("/api/v1/poster-render/claim", { method: "POST", body: "{}" }),
+    completePosterRender: (id: string, input: { claimToken: string; document?: import("@edgeever/shared").PosterDocument; errorCode?: "render_failed" | "revision_conflict" | "client_timeout" }) => request<{ job: { status: string } }>(`/api/v1/poster-render/${encodeURIComponent(id)}/complete`, { method: "POST", body: JSON.stringify(input) }),
     uploadMemoResourceParts,
 
     updateMemo: (
@@ -1865,6 +1889,12 @@ export const createEdgeEverClient = (options: EdgeEverClientOptions = {}) => {
       request<MemoResponse>(`/api/v1/memos/${memoId}/restore`, {
         method: "POST",
         body: JSON.stringify({}),
+      }),
+
+    duplicateMemo: (memoId: string, payload: { notebookId?: string; title?: string } = {}) =>
+      request<MemoResponse>(`/api/v1/memos/${encodeURIComponent(memoId)}/duplicate`, {
+        method: "POST",
+        body: JSON.stringify(payload),
       }),
 
     mergeMemos: (payload: { memoIds: string[]; notebookId?: string; title?: string }) =>

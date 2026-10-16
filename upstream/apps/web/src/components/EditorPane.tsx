@@ -27,11 +27,14 @@ import {
   Printer,
   Image as ImageIcon,
   Share2,
+  Globe,
   Copy,
+  CopyPlus,
   Lock,
   LockOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EditorTableContextMenu } from "@/components/EditorTableContextMenu";
 import { ClipboardCopyNotice } from "@/components/ClipboardCopyNotice";
 import { WeChatCopyProgress } from "@/components/WeChatCopyProgress";
 import { MemoEditorHeaderActions } from "@/components/MemoEditorHeaderActions";
@@ -161,6 +164,7 @@ import { NEW_IMAGE_WIDTH_PERCENT } from "@edgeever/shared/image-display";
 import { EdgeEverLink } from "@edgeever/shared/editor-link";
 import { createEdgeEverMathematics } from "@edgeever/shared/mathematics";
 import { codeBlockLowlight, EdgeEverCodeBlock } from "@/lib/code-block";
+import { shouldUploadWithPicGo, uploadImageWithPicGo } from "@/lib/picgo";
 import { compressImageForUpload } from "@/lib/image-compression";
 import { LOCAL_DATABASE_INTERRUPTED_EVENT, localDb, selectNewestLocalDraft, type MemoUpdateSyncPayload } from "@/lib/local-db";
 import { persistEmergencyDraft, readEmergencyDraft, removeEmergencyDraft } from "@/lib/emergency-draft";
@@ -340,6 +344,7 @@ type EditorPaneProps = {
   onRestored: (memoId: string) => Promise<void>;
   onMobileDefaultEditConsumed: () => void;
   onSaveAsTemplate: (memo: MemoDetail, name: string) => Promise<void>;
+  onDuplicateMemo?: (memo: MemoDetail) => void;
   searchFocusToken: number;
   replaceFocusToken: number;
   aiAssistantOpenToken: number;
@@ -418,6 +423,7 @@ const RichEditorPane = ({
   onRestored,
   onMobileDefaultEditConsumed,
   onSaveAsTemplate,
+  onDuplicateMemo,
   onCreatePoster,
   searchFocusToken,
   replaceFocusToken,
@@ -992,6 +998,18 @@ const RichEditorPane = ({
   }, [focusMobileInputTarget, isMobileViewport, memo?.id, mobileDefaultEditMemoId, onMobileDefaultEditConsumed, readOnly]);
 
   const uploadEditorResource = useCallback(async (targetMemoId: string, uploadFile: File, isImage: boolean) => {
+    if (isImage && shouldUploadWithPicGo()) {
+      const instanceKey = editorInstanceMemoIdentityRef.current.instanceKey;
+      const external = await uploadImageWithPicGo(uploadFile, {
+        title: t("settings.picgo.failedTitle"), message: t("settings.picgo.failedMessage"),
+        retry: t("settings.picgo.retry"), fallback: t("settings.picgo.fallback"), cancel: t("settings.picgo.cancel"),
+      });
+      // PicGo or its failure dialog may outlive the original note/instance.
+      if (memoRef.current?.id !== targetMemoId || editorInstanceMemoIdentityRef.current.instanceKey !== instanceKey) {
+        throw new Error("The active note changed during image upload");
+      }
+      if (external) return external;
+    }
     try {
       const resource = (await repository.uploadMemoResource(targetMemoId, uploadFile)).resource;
       return { ...resource, url: toDesktopResourceUrl(resource.url) };
@@ -1022,7 +1040,7 @@ const RichEditorPane = ({
         url: `edgeever-staged://${staged.id}`,
       };
     }
-  }, [repository]);
+  }, [repository, t]);
 
   const insertResourceFiles = useCallback((files: File[]) => {
     const currentMemo = memoRef.current;
@@ -1971,6 +1989,8 @@ const RichEditorPane = ({
 
   const {
     closeReplace: closeNoteReplace,
+    highlightQuery: noteSearchHighlightQuery,
+    highlightIndex: noteSearchHighlightIndex,
     closeSearch: closeNoteSearch,
     inputRef: noteSearchInputRef,
     matchLabel: noteSearchMatchLabel,
@@ -1988,6 +2008,9 @@ const RichEditorPane = ({
     setQuery: setNoteSearchQuery,
     setReplacement: setNoteSearchReplacement,
   } = useEditorNoteSearchController({
+    markdownMode: useMarkdownSourceEditor,
+    markdownSource,
+    markdownSourceEditorRef,
     contentSearchQuery,
     dirtyVersion,
     editor,
@@ -3883,6 +3906,7 @@ const RichEditorPane = ({
             style={editorColumnMatchesArticle && editorScrollbarGutter > 0 ? { paddingRight: editorScrollbarGutter } : undefined}
           >
           <div
+            ref={setHeaderTitleSlot}
             className={cn(
               "min-w-0 w-full",
               isDesktopColumn && desktopFocusMode && "mx-auto",
@@ -3893,7 +3917,6 @@ const RichEditorPane = ({
             }}
           >
           <div
-            ref={setHeaderTitleSlot}
             className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-4 sm:flex-nowrap"
           >
           <MemoEditorTopRowLeading
@@ -4042,12 +4065,7 @@ const RichEditorPane = ({
             {!readOnly && (!mobileEditingActive || isMemoShared) && (
               <IconTooltip label={t(isLocalMemoId(memo.id) ? "sharing.afterSync" : isMemoShared ? "sharing.manage" : "sharing.action")}>
                 <Button
-                  className={cn(
-                    "h-8 w-8",
-                    isMemoShared
-                      ? "bg-[#d4d4d4] text-[#2a2a2a] hover:bg-[#e4e4e4] hover:text-[#2a2a2a]"
-                      : "text-slate-500",
-                  )}
+                  className="h-8 w-8 text-slate-500"
                   size="icon"
                   variant="ghost"
                   type="button"
@@ -4056,7 +4074,7 @@ const RichEditorPane = ({
                   disabled={isLocalMemoId(memo.id)}
                   onClick={() => setShareOpen(true)}
                 >
-                  <Share2 className="h-4 w-4" aria-hidden="true" />
+                  {isMemoShared ? <Globe className="h-4 w-4" aria-hidden="true" /> : <Share2 className="h-4 w-4" aria-hidden="true" />}
                 </Button>
               </IconTooltip>
             )}
@@ -4178,13 +4196,30 @@ const RichEditorPane = ({
                   <DropdownMenuItem
                     className={cn(
                       "flex h-9 w-full items-center gap-2 px-3 text-left text-xs hover:bg-slate-50 cursor-pointer outline-none",
-                      isMemoShared ? "bg-workspace-selection text-slate-950" : "text-slate-700",
+                      isMemoShared ? "text-slate-950" : "text-slate-700",
                     )}
                     disabled={isLocalMemoId(memo.id)}
                     onClick={() => setShareOpen(true)}
                   >
-                    <Share2 className={cn("h-4 w-4", isMemoShared ? "text-slate-950" : "text-slate-500")} />
+                    {isMemoShared ? <Globe className="h-4 w-4 text-slate-950" /> : <Share2 className="h-4 w-4 text-slate-500" />}
                     {t(isLocalMemoId(memo.id) ? "sharing.afterSync" : isMemoShared ? "sharing.manage" : "sharing.action")}
+                  </DropdownMenuItem>
+                )}
+                {!readOnly && onDuplicateMemo && (
+                  <DropdownMenuItem
+                    className="flex h-9 w-full items-center gap-2 px-3 text-left text-xs text-slate-700 hover:bg-slate-50 cursor-pointer outline-none"
+                    // The server copies the saved note, so wait until every edit is saved.
+                    disabled={
+                      isLocalMemoId(memo.id)
+                      || hasUnsavedChanges
+                      || saveMutationPending
+                      || saveState === "conflict"
+                      || saveState === "error"
+                    }
+                    onClick={() => onDuplicateMemo(memo)}
+                  >
+                    <CopyPlus className="h-4 w-4 text-slate-500" />
+                    {t("editor.duplicate")}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
@@ -4416,6 +4451,8 @@ const RichEditorPane = ({
                   <MarkdownSourceEditor
                     ref={markdownSourceEditorRef}
                     memoId={memo?.id ?? ""}
+                    searchQuery={noteSearchHighlightQuery}
+                    searchIndex={noteSearchHighlightIndex}
                     value={markdownSource}
                     onChange={handleMarkdownSourceChange}
                     onPasteFiles={uploadMarkdownPasteFiles}
@@ -4468,9 +4505,11 @@ const RichEditorPane = ({
                     onAsk={() => requestSelectionAi("ask")}
                   />
                 </BubbleMenu>
-                <AttachmentTranscriptContext.Provider value={attachmentTranscriptContext}>
-                  <EditorContent editor={editor} />
-                </AttachmentTranscriptContext.Provider>
+                <EditorTableContextMenu editor={editor} readOnly={effectiveReadOnly}>
+                  <AttachmentTranscriptContext.Provider value={attachmentTranscriptContext}>
+                    <EditorContent editor={editor} />
+                  </AttachmentTranscriptContext.Provider>
+                </EditorTableContextMenu>
               </div>
             )}
           </div>

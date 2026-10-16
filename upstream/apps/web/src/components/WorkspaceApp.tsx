@@ -1,3 +1,4 @@
+import { startPosterClientRenderer } from "@/lib/poster-client-render";
 import {
   lazy,
   Suspense,
@@ -25,7 +26,7 @@ import { QuickMemoSwitcher } from "./QuickMemoSwitcher";
 import { AppConfirmDialog, MemoDeleteConfirmDialog, NotebookNameDialog } from "./dialogs/ConfirmDialogs";
 import { PluginPanelDialog } from "./plugins/PluginPanelDialog";
 import { shouldDiscardPluginNoteSearchRequest } from "./editor/note-search";
-import { api, getOrCreateClientDeviceId } from "@/lib/api";
+import { api, ApiRequestError, getOrCreateClientDeviceId } from "@/lib/api";
 import { useShowDescendantNotesPreference } from "@/lib/descendant-notes-preference";
 import { MarkdownExportMemoryLimitError, type MarkdownExportProgress } from "@/lib/markdown-export";
 import { exportSelectedMemosAsMarkdownZip } from "@/lib/selected-markdown-export";
@@ -66,7 +67,11 @@ import type {
 import {
   MIN_MEMO_LIST_WIDTH_PX,
   MAX_MEMO_LIST_WIDTH_PX,
+  getEditorPaneWidths,
   DEFAULT_MEMO_LIST_WIDTH_PX,
+  MIN_NOTEBOOK_SIDEBAR_WIDTH_PX,
+  MAX_NOTEBOOK_SIDEBAR_WIDTH_PX,
+  DEFAULT_NOTEBOOK_SIDEBAR_WIDTH_PX,
   EDITOR_OUTLINE_COLLAPSED_STORAGE_KEY,
   isTextEntryTarget,
   getSearchShortcutScope,
@@ -499,11 +504,14 @@ export const WorkspaceApp = ({
     imageCompressionEnabled,
     memoListWidth,
     notebookSidebarCollapsed,
+    notebookSidebarWidth,
     resetMemoListWidth,
+    resetNotebookSidebarWidth,
     setDesktopFocusMode,
     setImageCompressionEnabled,
     setMemoListWidth,
     setNotebookSidebarCollapsed,
+    setNotebookSidebarWidth,
     setShortcutSettings,
     shortcutSettings,
   } = useWorkspacePreferences();
@@ -548,6 +556,12 @@ export const WorkspaceApp = ({
   );
   const [isOnline, setIsOnline] = useState(isBrowserOnline);
   const [isDesktop, setIsDesktop] = useState(isDesktopViewport);
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   const [isManualMemoSyncing, setIsManualMemoSyncing] = useState(false);
   const [isStandaloneRuntime] = useState(isStandaloneApp);
   const [pullToRefreshDistance, setPullToRefreshDistance] = useState(0);
@@ -589,6 +603,14 @@ export const WorkspaceApp = ({
       queryClient.invalidateQueries({ queryKey: ["resources"], refetchType: "all" }),
     ]);
   }, [queryClient]);
+
+  useEffect(() => {
+    if (demoMode || (authRequired && !user) || isLoggingOut) return;
+    return startPosterClientRenderer(async () => {
+      await repository.sync();
+      await invalidateWorkspaceQueries();
+    }, i18n.language.startsWith("zh"));
+  }, [demoMode, authRequired, user?.id, isLoggingOut, repository, invalidateWorkspaceQueries, i18n.language]);
 
   const refreshWorkspaceFromServer = useCallback(async (mode: WorkspaceRefreshMode) => {
     if (isBrowserOffline()) {
@@ -649,6 +671,7 @@ export const WorkspaceApp = ({
   const notebooksQuery = useQuery({
     queryKey: ["notebooks"],
     queryFn: () => repository.listNotebooks(),
+    networkMode: "offlineFirst",
   });
 
   const templatesQuery = useQuery({
@@ -1047,6 +1070,8 @@ export const WorkspaceApp = ({
     [notebooks, selectedNotebookId, selectedTag, showDescendantNotes]
   );
   const memosQuery = useInfiniteQuery({
+    // Repository reads can resolve from IndexedDB without a network request.
+    networkMode: "offlineFirst",
     queryKey: ["memos", memoView, selectedNotebookId, search, memoFilterMode, memoSortMode, selectedNotebookScopeIds, selectedTag],
     queryFn: ({ pageParam }) => repository.listMemos({
         notebookId: memoView === "notebook" && !selectedTag ? selectedNotebookId : null,
@@ -1143,12 +1168,14 @@ export const WorkspaceApp = ({
   }, [rendererRecoveryMode, selectedMemoId]);
 
   const memoQuery = useQuery({
+    networkMode: "offlineFirst",
     queryKey: detailMemoId ? memoDetailQueryKey(detailMemoId, memoView) : ["memo", detailMemoId, memoView],
     queryFn: () => repository.getMemo(detailMemoId as string, memoView === "trash"),
     enabled: Boolean(detailMemoId),
   });
   const prefetchMemoDetail = useCallback((memoId: string) => {
     void queryClient.prefetchQuery({
+      networkMode: "offlineFirst",
       queryKey: memoDetailQueryKey(memoId, memoView),
       queryFn: () => repository.getMemo(memoId, memoView === "trash"),
     });
@@ -1315,14 +1342,14 @@ export const WorkspaceApp = ({
   });
 
   const useTemplateMutation = useMutation({
-    mutationFn: async (input: { templateId: string; notebookId: string }) => {
+    mutationFn: async (input: { templateId: string; notebookId: string; locale?: string }) => {
       const requiresRemoteMemo = requiresRemoteMemoForStandaloneMobileEditor({
         mobileViewport: !isDesktopViewport(),
         desktopRuntime: Boolean(window.edgeeverDesktop?.isAvailable),
       });
       const data = requiresRemoteMemo
-        ? await api.useTemplate(input.templateId, input.notebookId)
-        : await repository.useTemplate(input.templateId, input.notebookId);
+        ? await api.useTemplate(input.templateId, input.notebookId, input.locale)
+        : await repository.useTemplate(input.templateId, input.notebookId, input.locale);
       if (requiresRemoteMemo) notifyRepositoryMutation(localDataScope, { type: "note.created", note: data.memo });
       await putLocalMemo(localDataScope, data.memo);
       return data;
@@ -1379,6 +1406,35 @@ export const WorkspaceApp = ({
       setRightView("editor");
       setSelectedMemoId(data.memo.id);
       setActivePane("editor");
+    },
+  });
+
+  const duplicateMemoMutation = useMutation({
+    mutationFn: (input: { memoId: string; title: string }) => repository.duplicateMemo(input.memoId, { title: input.title }),
+    onSuccess: async (data) => {
+      cacheMemoDetail(queryClient, data.memo, "notebook");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["memos"] }),
+        queryClient.invalidateQueries({ queryKey: ["notebooks"] }),
+      ]);
+      setRightView("editor");
+      setSelectedMemoId(data.memo.id);
+      setActivePane("editor");
+    },
+    onError: (error) => {
+      const code = error instanceof ApiRequestError ? error.code : error instanceof Error ? error.message : null;
+      setAppNoticeDialog({
+        title: t("editor.duplicateFailedTitle"),
+        description: code === "memo_duplicate_offline"
+          ? t("editor.duplicateOffline")
+          : code === "memo_duplicate_pending_changes"
+            ? t("editor.duplicatePendingChanges")
+            : code === "duplicate_too_large"
+              ? t("editor.duplicateTooLarge")
+              : code === "duplicate_resource_missing" || code === "duplicate_unsupported"
+                ? t("editor.duplicateFilesUnavailable")
+                : t("editor.duplicateFailed"),
+      });
     },
   });
 
@@ -1972,7 +2028,11 @@ export const WorkspaceApp = ({
 
   const handleUseSavedTemplate = (template: SavedMemoTemplate) => {
     if (!createMemoNotebookId || memoView === "trash") return;
-    useTemplateMutation.mutate({ templateId: template.id, notebookId: createMemoNotebookId });
+    useTemplateMutation.mutate({
+      templateId: template.id,
+      notebookId: createMemoNotebookId,
+      locale: i18n.resolvedLanguage,
+    });
   };
 
   const handleMobileDefaultEditConsumed = useCallback(() => {
@@ -2076,6 +2136,14 @@ export const WorkspaceApp = ({
         onSuccess: clearMemoSelection,
       }
     );
+  };
+
+  const handleDuplicateMemo = (memo: { id: string; title: string | null }) => {
+    if (duplicateMemoMutation.isPending || memoView === "trash") return;
+    duplicateMemoMutation.mutate({
+      memoId: memo.id,
+      title: t("editor.duplicateTitle", { title: memo.title?.trim() || t("common.untitledMemo") }).slice(0, 160),
+    });
   };
 
   const handleMerge = () => {
@@ -2774,7 +2842,7 @@ export const WorkspaceApp = ({
       }
 
       const targetElement = event.target instanceof Element ? event.target : null;
-      const isEditorTextTarget = Boolean(targetElement?.closest(".ProseMirror"));
+      const isEditorTextTarget = Boolean(targetElement?.closest(".ProseMirror, .edgeever-markdown-source-editor"));
 
       const transientLayerOpen = Boolean(
         appNoticeDialog ||
@@ -2932,10 +3000,10 @@ export const WorkspaceApp = ({
     event.preventDefault();
     event.currentTarget.focus({ preventScroll: true });
     const startX = event.clientX;
-    const startWidth = memoListWidth;
+    const startWidth = editorPaneWidths.list;
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
-      setMemoListWidth(startWidth + moveEvent.clientX - startX);
+      updateMemoListWidth(startWidth + moveEvent.clientX - startX);
     };
 
     const handlePointerUp = () => {
@@ -2951,13 +3019,78 @@ export const WorkspaceApp = ({
     window.addEventListener("pointerup", handlePointerUp);
   };
 
+  const handleNotebookSidebarResizePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isDesktopViewport() || desktopNotebookSidebarCollapsed) {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.focus({ preventScroll: true });
+    const startX = event.clientX;
+    const startWidth = rightView === "editor" ? editorPaneWidths.sidebar : notebookSidebarWidth;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setNotebookSidebarWidth(startWidth + moveEvent.clientX - startX);
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+  };
+
+  const handleNotebookSidebarResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!isDesktopViewport() || desktopNotebookSidebarCollapsed) {
+      return;
+    }
+
+    const step = event.shiftKey ? 48 : 16;
+    const displayedWidth = rightView === "editor" ? editorPaneWidths.sidebar : notebookSidebarWidth;
+    let nextWidth: number | null = null;
+
+    if (event.key === "ArrowLeft") {
+      nextWidth = displayedWidth - step;
+    } else if (event.key === "ArrowRight") {
+      nextWidth = displayedWidth + step;
+    } else if (event.key === "Home") {
+      nextWidth = MIN_NOTEBOOK_SIDEBAR_WIDTH_PX;
+    } else if (event.key === "End") {
+      nextWidth = MAX_NOTEBOOK_SIDEBAR_WIDTH_PX;
+    } else if (event.key === "Enter" || event.key === " ") {
+      nextWidth = DEFAULT_NOTEBOOK_SIDEBAR_WIDTH_PX;
+    }
+
+    if (nextWidth === null) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    setNotebookSidebarWidth(nextWidth);
+  };
+
   const handleResetMemoListWidth = () => {
     resetMemoListWidth();
   };
 
   const updateMemoListWidth = (width: number) => {
-    setMemoListWidth(width);
+    setMemoListWidth(Math.min(width, editorPaneWidths.maximum));
   };
+
+  const editorPaneWidths = getEditorPaneWidths(
+    viewportWidth,
+    desktopNotebookSidebarCollapsed ? 56 : notebookSidebarWidth,
+    memoListWidth,
+  );
 
   const handleMemoListResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (!isDesktopViewport()) {
@@ -2968,9 +3101,9 @@ export const WorkspaceApp = ({
     let nextWidth: number | null = null;
 
     if (event.key === "ArrowLeft") {
-      nextWidth = memoListWidth - step;
+      nextWidth = editorPaneWidths.list - step;
     } else if (event.key === "ArrowRight") {
-      nextWidth = memoListWidth + step;
+      nextWidth = editorPaneWidths.list + step;
     } else if (event.key === "Home") {
       nextWidth = MIN_MEMO_LIST_WIDTH_PX;
     } else if (event.key === "End") {
@@ -3055,12 +3188,15 @@ export const WorkspaceApp = ({
                 : "edgeever-workspace-grid--single-right",
             !desktopFocusModeActive && desktopNotebookSidebarCollapsed && "edgeever-workspace-grid--sidebar-collapsed"
           )}
-          style={{ "--memo-list-width": `${memoListWidth}px` } as CSSProperties}
+          style={{
+            "--memo-list-width": `${editorPaneWidths.list}px`,
+            "--notebook-sidebar-expanded-width": `${isDesktop && rightView === "editor" ? editorPaneWidths.sidebar : notebookSidebarWidth}px`,
+          } as CSSProperties}
         >
           <aside
             id="edgeever-notebook-sidebar"
             className={cn(
-              "edgeever-workspace-sidebar min-h-0 overflow-hidden border-r",
+              "edgeever-workspace-sidebar relative min-h-0 overflow-hidden border-r",
               desktopFocusModeActive
                 ? "hidden"
                 : visibleActivePane === "notebooks"
@@ -3128,6 +3264,21 @@ export const WorkspaceApp = ({
                   collapseShortcutLabel={formatShortcutBinding(shortcutSettings.toggleSidebar)}
                 />
               </Suspense>
+            )}
+            {!desktopNotebookSidebarCollapsed && (
+              <div
+                className="absolute inset-y-0 right-0 z-20 hidden w-1.5 touch-none cursor-col-resize transition hover:bg-slate-300/70 focus-visible:bg-slate-400/80 focus-visible:outline-none lg:block"
+                role="separator"
+                aria-orientation="vertical"
+                aria-valuemin={MIN_NOTEBOOK_SIDEBAR_WIDTH_PX}
+                aria-valuemax={rightView === "editor" ? getEditorPaneWidths(viewportWidth, MAX_NOTEBOOK_SIDEBAR_WIDTH_PX, memoListWidth).sidebar : MAX_NOTEBOOK_SIDEBAR_WIDTH_PX}
+                aria-valuenow={rightView === "editor" ? editorPaneWidths.sidebar : notebookSidebarWidth}
+                aria-label={t("workspaceDialogs.resizeNotebookSidebar")}
+                tabIndex={0}
+                onDoubleClick={resetNotebookSidebarWidth}
+                onKeyDown={handleNotebookSidebarResizeKeyDown}
+                onPointerDown={handleNotebookSidebarResizePointerDown}
+              />
             )}
           </aside>
 
@@ -3226,6 +3377,7 @@ export const WorkspaceApp = ({
                 });
               }}
               onMerge={handleMerge}
+              onDuplicateMemo={handleDuplicateMemo}
               onDeleteMemo={handleDeleteMemoFromList}
               onEmptyTrash={handleEmptyTrash}
               onRestoreMemo={handleRestoreMemoFromList}
@@ -3292,9 +3444,9 @@ export const WorkspaceApp = ({
               className="absolute inset-y-0 right-[-3px] z-20 hidden w-1.5 cursor-col-resize transition hover:bg-slate-300/70 focus-visible:bg-slate-400/80 focus-visible:outline-none lg:block"
               role="separator"
               aria-orientation="vertical"
-              aria-valuemin={MIN_MEMO_LIST_WIDTH_PX}
-              aria-valuemax={MAX_MEMO_LIST_WIDTH_PX}
-              aria-valuenow={memoListWidth}
+              aria-valuemin={editorPaneWidths.minimum}
+              aria-valuemax={editorPaneWidths.maximum}
+              aria-valuenow={editorPaneWidths.list}
               aria-label={t("workspaceDialogs.resizeMemoList")}
               tabIndex={0}
               title={t("workspaceDialogs.resizeMemoListHint")}
@@ -3612,6 +3764,7 @@ export const WorkspaceApp = ({
                     }}
                     onMobileDefaultEditConsumed={handleMobileDefaultEditConsumed}
                     onSaveAsTemplate={handleSaveAsTemplate}
+                    onDuplicateMemo={handleDuplicateMemo}
                     />
                       )}
                     </EditorPaneErrorBoundary>
