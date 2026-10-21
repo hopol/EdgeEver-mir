@@ -1,26 +1,17 @@
 {
-  "version": "1.120.0",
+  "version": "2.0.3",
   "changes": {
     "en-US": [
-      "Duplicate a note together with independent copies of its images and attachments from the note actions menu.",
-      "Refine note image sharing with curated layouts, coordinated typography and neutral colors for the white theme.",
-      "Expand Web Clipper support for article and specialized platforms, including WeChat, Juejin, Douban, Jike and BOSS Zhipin, with improved content and image capture.",
-      "Pasted links no longer include adjacent Chinese, Japanese or Korean prose.",
-      "Improve desktop AI process cleanup by waiting for process closure before removing temporary workspaces."
+      "Fix AI generation failing with “undefined is not a function” on Android. Thanks @yulei666 for #630.",
+      "Fix Markdown formatting when importing notes on desktop."
     ],
     "zh-CN": [
-      "支持从笔记操作菜单复制笔记，同时独立复制图片与附件。",
-      "优化笔记图片分享的主题排版与字体搭配，并修正白色主题的配色。",
-      "扩展网页剪藏对微信公众号、掘金、豆瓣、即刻、BOSS 直聘等文章及垂直平台的支持，改善正文和图片采集。",
-      "修复粘贴链接时将相邻中日韩文字误识别为网址的问题。",
-      "改善桌面 AI 进程清理，等待进程完全关闭后再清理临时工作区。"
+      "修复 Android 上 AI 生成立即报错“undefined is not a function”的问题。感谢 @yulei666 的贡献（#630）。",
+      "修复桌面端导入 Markdown 笔记时格式未正确解析的问题。"
     ],
     "ja": [
-      "ノート操作メニューから、画像と添付ファイルの独立したコピーを含むノートの複製に対応しました。",
-      "ノート画像共有のレイアウトと書体の組み合わせを改善し、白いテーマの配色を調整しました。",
-      "Web ClipperのWeChat、Juejin、Douban、Jike、BOSS Zhipinなどの記事・専門プラットフォームへの対応を拡張し、本文と画像の取得を改善しました。",
-      "リンク貼り付け時に隣接する中国語・日本語・韓国語の文章をURLに含める問題を修正しました。",
-      "デスクトップAIプロセスの終了を待ってから一時ワークスペースを削除するよう改善しました。"
+      "Android で AI 生成時に「undefined is not a function」と表示される問題を修正しました。@yulei666 さんの貢献（#630）に感謝します。",
+      "デスクトップ版でノートをインポートする際に Markdown の書式が正しく反映されない問題を修正しました。"
     ]
   }
 }

@@ -12,7 +12,7 @@ import { getCompanionAction, applyCompanionAction, dismissCompanionAction } from
 import { COMPANION_MCP_TOOLS, validateCompanionTool } from "./companion-tool-catalog.ts";
 import { MCP_TOOLS } from "./mcp-tools.ts";
 import { companionToolDefinitions, createCompanionTools, explicitDiagramKind, requestsInfographic, resolveWorkspaceInboxId } from "./companion-agent-tools.ts";
-import { companionExecutionReceipts } from "./companion-runtime.ts";
+import { companionExecutionReceipts } from "./test-support/companion-model.ts";
 
 const databases = [];
 afterEach(() => databases.splice(0).forEach(db => db.close()));
@@ -120,7 +120,7 @@ describe("shared companion MCP adapter", () => {
   });
 
   const operations = [
-    ["create_memo", n => ({ notebookId: "ideas", title: "New", contentMarkdown: "Exact new body" })],
+    ["create_memo", () => ({ notebookId: "ideas", title: "New", contentMarkdown: "Exact new body" })],
     ["update_memo", n => ({ memoId: n[0].id, title: "Changed", contentMarkdown: "Exact replacement" })],
     ["merge_memos", n => ({ memoIds: n.map(note => note.id), title: "Merged", notebookId: "target" })],
     ["move_memos", n => ({ memoIds: [n[0].id], notebookId: "target" })],

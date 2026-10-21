@@ -7,7 +7,7 @@ import type {
   DesktopRpcParams,
   DesktopRpcResponses,
 } from "@edgeever/shared";
-import { docToMarkdown, docToText, type MemoDetail } from "@edgeever/shared";
+import { docToMarkdown, docToText, markdownToDoc, type MemoDetail } from "@edgeever/shared";
 import { localizeDefaultMemoTemplate } from "@edgeever/shared/memo-template-seeds";
 import type { EdgeEverRepository } from "@/lib/repository";
 import { api, getConfiguredDesktopApiBaseUrl } from "@/lib/api";
@@ -161,13 +161,9 @@ export const createDesktopRepository = (): EdgeEverRepository => ({
       return local;
     }
     if (typeof navigator !== "undefined" && !navigator.onLine) return local;
-    try {
-      const remote = await api.listTemplates();
-      await Promise.all(remote.templates.map((template) => request("template.cache", { template })));
-      return remote;
-    } catch (error) {
-      throw error;
-    }
+    const remote = await api.listTemplates();
+    await Promise.all(remote.templates.map((template) => request("template.cache", { template })));
+    return remote;
   },
   createTemplate: (input) => request("template.create", input).then((result) => {
     window.dispatchEvent(new CustomEvent("edgeever:sync-queue-changed"));
@@ -316,10 +312,14 @@ export const createDesktopRepository = (): EdgeEverRepository => ({
   },
 
   createMemo: (input) => {
+    // The sidecar fallback wraps raw lines as paragraphs; parse Markdown here
+    // with the same schema used by the editor before persisting a new note.
+    const contentJson = input.contentJson ?? markdownToDoc(input.contentMarkdown ?? "");
     const rpcParams: DesktopMemoCreateParams = {
       ...input,
+      contentJson,
       contentMarkdown: mapMarkdownResourceUrls(input.contentMarkdown, toApiResourceUrl),
-      contentText: input.contentJson ? docToText(input.contentJson) : undefined,
+      contentText: docToText(contentJson),
     };
     return request("memo.create", rpcParams).then((result) => {
       window.dispatchEvent(new CustomEvent("edgeever:sync-queue-changed"));
