@@ -1,17 +1,26 @@
 {
-  "version": "2.0.3",
+  "version": "2.7.0",
   "changes": {
     "en-US": [
-      "Fix AI generation failing with “undefined is not a function” on Android. Thanks @yulei666 for #630.",
-      "Fix Markdown formatting when importing notes on desktop."
+      "On the web and desktop apps, each notebook can set its own icon, icon color, text color, bold text, and an inverted icon or inverted row. Colors can be a preset or a six-digit HEX value. The settings are included in sync and backups. Existing notebooks keep their current appearance, and no manual migration is required. Thanks @thorufur for #673.",
+      "On the web and desktop apps, a tooltip closes as soon as the pointer leaves its trigger, including when the pointer moves onto the tooltip. Keyboard focus, Escape, and blur still dismiss it. Interactive hover cards stay as they are. Thanks @thorufur for #674.",
+      "On Android, the first share from another app reaches EdgeEver after the app process has already exited.",
+      "While the Android editor saves in the background, the Done button stays a label, and the status no longer cycles between Saving and Saved. Further typing starts the autosave wait again.",
+      "Saving a long Markdown note no longer freezes the server by reparsing the rest of the note."
     ],
     "zh-CN": [
-      "修复 Android 上 AI 生成立即报错“undefined is not a function”的问题。感谢 @yulei666 的贡献（#630）。",
-      "修复桌面端导入 Markdown 笔记时格式未正确解析的问题。"
+      "网页和桌面端的每个笔记本可以单独设置图标、图标颜色、文字颜色、粗体，以及只反转图标或反转整行。颜色可以选预设，也可以填写六位 HEX。这些设置会随同步和备份保存。已有笔记本保持原来的外观，不需要手动迁移。感谢 @thorufur（#673）。",
+      "网页和桌面端的悬停提示会在指针离开触发区域时马上关闭，指针移到提示上也会关闭。键盘聚焦、Escape 和失焦仍然会关闭提示。可以交互的悬停卡片保持原样。感谢 @thorufur（#674）。",
+      "Android 版在进程已经结束后，第一次从其他应用分享进来的内容可以进入 EdgeEver。",
+      "Android 编辑器在后台自动保存时，完成按钮保持文字，状态也不再在“保存中”和“已保存”之间来回切换。继续输入会重新等待自动保存。",
+      "保存较长的 Markdown 笔记时，服务端不再因重复解析整篇内容而卡住。"
     ],
     "ja": [
-      "Android で AI 生成時に「undefined is not a function」と表示される問題を修正しました。@yulei666 さんの貢献（#630）に感謝します。",
-      "デスクトップ版でノートをインポートする際に Markdown の書式が正しく反映されない問題を修正しました。"
+      "Web とデスクトップでは、各ノートブックにアイコン、アイコンの色、文字色、太字、アイコンのみまたは行全体の反転を設定できます。色はプリセットか 6 桁の HEX です。設定は同期とバックアップに含まれます。既存のノートブックの見た目はそのままで、手動の移行は不要です。@thorufur の貢献に感謝します（#673）。",
+      "Web とデスクトップでは、ポインタがトリガーを離れるとツールチップがすぐ閉じます。ヒントの上に移動した場合も閉じます。キーボードフォーカス、Escape、フォーカス解除でも閉じます。操作できるホバーカードはこれまでどおりです。@thorufur の貢献に感謝します（#674）。",
+      "Android では、アプリのプロセスが終了したあとの最初の共有も EdgeEver に届きます。",
+      "Android のエディタがバックグラウンドで保存するとき、完了ボタンは文字のままです。状態が「保存中」と「保存済み」の間で切り替わることもありません。入力を続けると自動保存の待ち時間がやり直されます。",
+      "長い Markdown ノートを保存しても、残りの本文を繰り返し解析してサーバーが固まることはありません。"
     ]
   }
 }
