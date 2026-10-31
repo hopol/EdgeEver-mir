@@ -15,7 +15,12 @@ const notebook = (id: string, name: string, parentId: string | null = null): Not
   name,
   slug: id,
   icon: "notebook",
-  color: null,
+  color: "#2563eb",
+  textColor: "#123456",
+  colorTarget: "both",
+  isBold: true,
+  iconInverted: true,
+  rowInverted: true,
   sortOrder: parentId ? 20 : 10,
   memoCount: 1,
   lastMemoUpdatedAt: "2026-07-14T00:00:00.000Z",
@@ -112,6 +117,24 @@ describe("EdgeEver ZIP", () => {
     })]))).rejects.toEqual(expect.objectContaining({ code: "unsupportedVersion" }));
   });
 
+  test("keeps archive counts and progress when later pages omit totals", async () => {
+    const progress: { completed: number; total: number }[] = [];
+    const blob = await createEdgeEverZip({
+      listNotebooks: async () => ({ notebooks: [notebook("nb_child", "Child")] }),
+      listPrompts: async () => ({ prompts: [] }),
+      getPage: async (offset) => ({
+        memos: [{ ...memo, id: `memo_page_${offset}`, contentMarkdown: "body" }],
+        resources: [], revisions: [],
+        ...(offset === 0 ? { totalCount: 2 } : {}), nextOffset: offset === 0 ? 1 : null,
+      }),
+      getResourceResponse: async () => new Response(),
+    }, { edgeeverVersion: "2.16.0", buildId: "pagination" }, (value) => progress.push(value));
+    const parsed = await parseEdgeEverZip(blob);
+    expect(parsed.manifest.counts.memos).toBe(2);
+    expect(progress.every((value) => value.total === 2)).toBe(true);
+    expect(progress.at(-1)?.completed).toBe(2);
+  });
+
   test("combines readable Markdown with versioned recovery data", async () => {
     const resourceChunks: number[] = [];
     const blob = await createEdgeEverZip(
@@ -154,6 +177,10 @@ describe("EdgeEver ZIP", () => {
     expect(backup.manifest.format).toBe("edgeever-zip");
     expect(backup.manifest.formatVersion).toBe(2);
     expect(backup.manifest.counts).toEqual({ notebooks: 2, memos: 1, revisions: 1, resources: 1, prompts: 1 });
+    expect(backup.notebooks.find((item) => item.id === "nb_child")).toMatchObject({
+      color: "#2563eb", textColor: "#123456", colorTarget: "both",
+      isBold: true, iconInverted: true, rowInverted: true,
+    });
     expect(backup.prompts).toEqual([prompt]);
     expect(backup.notebooks.map((item) => item.id)).toEqual(["nb_root", "nb_child"]);
     expect(backup.memos[0].memo.contentMarkdown).toBe(memo.contentMarkdown);

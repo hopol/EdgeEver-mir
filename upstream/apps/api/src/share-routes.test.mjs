@@ -49,9 +49,10 @@ class SqliteD1Database {
 const sourceToken = "s".repeat(43);
 const targetToken = "t".repeat(43);
 
-const createDatabaseEnvironment = () => {
+const createDatabaseEnvironment = ({ presentationMigration = true } = {}) => {
   const sqlite = new Database(":memory:");
   for (const migration of globSync("migrations/*.sql").sort()) {
+    if (!presentationMigration && migration.endsWith("0083_memo_share_presentation.sql")) continue;
     sqlite.exec(readFileSync(migration, "utf8"));
   }
   sqlite.query("INSERT INTO workspaces (id, name, is_personal) VALUES (?, ?, 1)")
@@ -103,6 +104,69 @@ describe("public memo shares", () => {
       share: { memoShareTokens: { memo_target: targetToken }, bodyFont: null },
     });
     sqlite.close();
+  });
+
+  test("defaults both presentation settings on for migrated shares and new shares", async () => {
+    const { sqlite, environment } = createDatabaseEnvironment({ presentationMigration: false });
+    try {
+      sqlite.exec("UPDATE memo_shares SET show_details = 0");
+      const before = sqlite.query("SELECT * FROM memo_shares ORDER BY id").all();
+      sqlite.exec(readFileSync("migrations/0083_memo_share_presentation.sql", "utf8"));
+      expect(sqlite.prepare("SELECT * FROM memo_shares ORDER BY id").all()).toEqual(
+        before.map((row) => ({ ...row, show_updated_at: 1, show_branding: 1 })),
+      );
+      const app = createShareApp(environment);
+      for (const path of ["/api/v1/memos/memo_source/share", `/api/public/shares/${sourceToken}`]) {
+        const share = (await (await app.request(path, {}, environment)).json()).share;
+        expect(share).toMatchObject({ showUpdatedAt: true, showBranding: true });
+        expect(share).not.toHaveProperty("showDetails");
+      }
+      const created = await app.request("/api/v1/memos/memo_private/share", { method: "POST" }, environment);
+      expect(created.status).toBe(201);
+      expect((await created.json()).share).toMatchObject({ showUpdatedAt: true, showBranding: true });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  test("persists all four time/branding combinations independently without changing passwords", async () => {
+    const { sqlite, environment } = createDatabaseEnvironment();
+    const app = createShareApp(environment);
+    const path = "/api/v1/memos/memo_source/share";
+    const patch = (body) => app.request(path, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }, environment);
+    try {
+      const protectedShare = (await (await patch({ password: "custom-password-714" })).json()).share;
+      const unlocked = await app.request(`/api/public/shares/${sourceToken}/unlock`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: protectedShare.password }),
+      }, environment);
+      const headers = { Cookie: unlocked.headers.get("Set-Cookie").split(";")[0] };
+      const passwordBefore = sqlite.query("SELECT password_hash, password_encrypted FROM memo_shares WHERE token = ?").get(sourceToken);
+      for (const [payload, expected] of [
+        [{ showUpdatedAt: true, showBranding: true }, { showUpdatedAt: true, showBranding: true }],
+        [{ showUpdatedAt: false }, { showUpdatedAt: false, showBranding: true }],
+        [{ showBranding: false }, { showUpdatedAt: false, showBranding: false }],
+        [{ showUpdatedAt: true }, { showUpdatedAt: true, showBranding: false }],
+      ]) {
+        const response = await patch(payload);
+        expect(response.status).toBe(200);
+        expect((await response.json()).share).toMatchObject({ ...expected, password: protectedShare.password });
+        expect((await (await app.request(path, {}, environment)).json()).share).toMatchObject(expected);
+        const listed = (await (await app.request("/api/v1/memo-shares", {}, environment)).json()).shares;
+        expect(listed.find((share) => share.memoId === "memo_source")).toMatchObject(expected);
+        const publicResponse = await app.request(`/api/public/shares/${sourceToken}`, { headers }, environment);
+        expect(publicResponse.status).toBe(200);
+        expect((await publicResponse.json()).share).toMatchObject(expected);
+        expect(sqlite.query("SELECT show_updated_at, show_branding FROM memo_shares WHERE token = ?").get(sourceToken))
+          .toEqual({ show_updated_at: Number(expected.showUpdatedAt), show_branding: Number(expected.showBranding) });
+        expect(sqlite.query("SELECT password_hash, password_encrypted FROM memo_shares WHERE token = ?").get(sourceToken))
+          .toEqual(passwordBefore);
+      }
+    } finally {
+      sqlite.close();
+    }
   });
 
   test("reads existing fonts and new catalog choices through the same stored preference", async () => {
@@ -429,6 +493,55 @@ describe("memo share management", () => {
 });
 
 describe("password-protected memo shares", () => {
+  test("accepts an owner-chosen password, trims it, and keeps the password gate", async () => {
+    const { sqlite, environment } = createDatabaseEnvironment();
+    const app = createShareApp(environment);
+    const path = "/api/v1/memos/memo_source/share";
+
+    const enabled = await app.request(path, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "  custom-pass  " }),
+    }, environment);
+    expect(enabled.status).toBe(200);
+    expect((await enabled.json()).share).toMatchObject({ passwordProtected: true, password: "custom-pass" });
+    const stored = sqlite.query("SELECT password_hash, password_encrypted FROM memo_shares WHERE memo_id = ?").get("memo_source");
+    expect(stored.password_hash).not.toContain("custom-pass");
+    expect(stored.password_encrypted).not.toContain("custom-pass");
+
+    expect((await app.request(`/api/public/shares/${sourceToken}`, {}, environment)).status).toBe(403);
+    const unlocked = await app.request(`/api/public/shares/${sourceToken}/unlock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "custom-pass" }),
+    }, environment);
+    expect(unlocked.status).toBe(200);
+
+    const rotated = await app.request(path, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passwordProtected: true, password: "new-pass" }),
+    }, environment);
+    expect((await rotated.json()).share.password).toBe("new-pass");
+    sqlite.close();
+  });
+
+  test("rejects custom passwords outside the supported length", async () => {
+    const { sqlite, environment } = createDatabaseEnvironment();
+    const app = createShareApp(environment);
+    const path = "/api/v1/memos/memo_source/share";
+    for (const password of ["   ", "abc", "x".repeat(65)]) {
+      const response = await app.request(path, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      }, environment);
+      expect(response.status).toBe(400);
+    }
+    expect((await (await app.request(path, {}, environment)).json()).share.passwordProtected).toBe(false);
+    sqlite.close();
+  });
+
   test("keeps existing shares public until a password is enabled", async () => {
     const { sqlite, environment } = createDatabaseEnvironment();
     const app = createShareApp(environment);
@@ -512,7 +625,7 @@ describe("password-protected memo shares", () => {
     sqlite.close();
   });
 
-  test("clearing the password makes the existing link public again", async () => {
+  test("clearing the password ignores a supplied value and makes the existing link public again", async () => {
     const { sqlite, environment } = createDatabaseEnvironment();
     sqlite.query("UPDATE memo_shares SET password_hash = ? WHERE token = ?")
       .run(await hashPassword("secretPwd"), sourceToken);
@@ -521,7 +634,7 @@ describe("password-protected memo shares", () => {
     const cleared = await app.request(`/api/v1/memos/memo_source/share`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ passwordProtected: false }),
+      body: JSON.stringify({ passwordProtected: false, password: "ignored-value" }),
     }, environment);
     expect(cleared.status).toBe(200);
     const clearedBody = await cleared.json();
@@ -649,4 +762,122 @@ test("public SVG previews use the same sandbox and preserve the original", async
   expect(response.headers.get("content-security-policy")).toBe("default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; sandbox");
   expect(await response.text()).toBe(svg);
   sqlite.close();
+});
+
+describe("custom memo share addresses", () => {
+  const patchShare = (app, environment, memoId, body) => app.request(`/api/v1/memos/${memoId}/share`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  }, environment);
+
+  test("serves the note at the custom address while the token link keeps working", async () => {
+    const { sqlite, environment } = createDatabaseEnvironment();
+    const app = createShareApp(environment);
+    const updated = await patchShare(app, environment, "memo_source", { slug: "  My-Notes-2026 " });
+    expect(updated.status).toBe(200);
+    expect((await updated.json()).share).toMatchObject({ token: sourceToken, slug: "my-notes-2026", passwordProtected: false });
+
+    for (const segment of ["my-notes-2026", "My-Notes-2026", sourceToken]) {
+      const response = await app.request(`/api/public/shares/${segment}`, {}, environment);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ share: { title: "Source" } });
+    }
+    expect((await (await app.request("/api/v1/memo-shares", {}, environment)).json()).shares)
+      .toContainEqual(expect.objectContaining({ memoId: "memo_source", slug: "my-notes-2026" }));
+    sqlite.close();
+  });
+
+  test("links between public notes prefer the custom address", async () => {
+    const { sqlite, environment } = createDatabaseEnvironment();
+    const app = createShareApp(environment);
+    expect((await patchShare(app, environment, "memo_target", { slug: "target-note" })).status).toBe(200);
+    const response = await app.request(`/api/public/shares/${sourceToken}`, {}, environment);
+    expect((await response.json()).share.memoShareTokens).toEqual({ memo_target: "target-note" });
+    sqlite.close();
+  });
+
+  test("rejects invalid, reserved and already used addresses", async () => {
+    const { sqlite, environment } = createDatabaseEnvironment();
+    const app = createShareApp(environment);
+    for (const slug of ["ab", "-lead", "trail-", "double--dash", "spa ce", "ünï", "x".repeat(41), "notebook", ""]) {
+      expect((await patchShare(app, environment, "memo_source", { slug })).status).toBe(400);
+    }
+    expect((await patchShare(app, environment, "memo_source", { slug: "taken" })).status).toBe(200);
+    const conflict = await patchShare(app, environment, "memo_target", { slug: "TAKEN" });
+    expect(conflict.status).toBe(409);
+    expect((await conflict.json()).error.code).toBe("share_slug_taken");
+    expect((await patchShare(app, environment, "memo_source", { slug: "taken" })).status).toBe(200);
+    expect((await patchShare(app, environment, "memo_source", {})).status).toBe(400);
+    sqlite.close();
+  });
+
+  test("clearing or changing the address retires the old one immediately", async () => {
+    const { sqlite, environment } = createDatabaseEnvironment();
+    const app = createShareApp(environment);
+    await patchShare(app, environment, "memo_source", { slug: "first-name" });
+    await patchShare(app, environment, "memo_source", { slug: "second-name" });
+    expect((await app.request("/api/public/shares/first-name", {}, environment)).status).toBe(404);
+    expect((await app.request("/api/public/shares/second-name", {}, environment)).status).toBe(200);
+
+    const cleared = await patchShare(app, environment, "memo_source", { slug: null });
+    expect((await cleared.json()).share.slug).toBeNull();
+    expect((await app.request("/api/public/shares/second-name", {}, environment)).status).toBe(404);
+    expect((await app.request(`/api/public/shares/${sourceToken}`, {}, environment)).status).toBe(200);
+
+    await patchShare(app, environment, "memo_target", { slug: "second-name" });
+    await app.request("/api/v1/memos/memo_target/share", { method: "DELETE" }, environment);
+    expect((await app.request("/api/public/shares/second-name", {}, environment)).status).toBe(404);
+    sqlite.close();
+  });
+
+  test("keeps a released address bound to its workspace so other tenants cannot take over old links", async () => {
+    const { sqlite, environment } = createDatabaseEnvironment();
+    sqlite.query("INSERT INTO workspaces (id, name, is_personal) VALUES (?, ?, 1)").run("ws_other", "Other workspace");
+    sqlite.query("INSERT INTO notebooks (id, workspace_id, name) VALUES (?, ?, ?)").run("nb_other", "ws_other", "Other");
+    sqlite.query("INSERT INTO memos (id, workspace_id, notebook_id, title) VALUES (?, ?, ?, ?)").run("memo_other", "ws_other", "nb_other", "Other");
+    sqlite.query("INSERT INTO memo_shares (id, memo_id, workspace_id, token) VALUES (?, ?, ?, ?)").run("share_other", "memo_other", "ws_other", "o".repeat(43));
+    const app = createShareApp(environment);
+    const otherApp = new Hono();
+    otherApp.use("/api/v1/*", async (c, next) => {
+      c.set("auth", { ...memberAuth, actorId: "user_other", workspaceId: "ws_other" });
+      await next();
+    });
+    registerMemoShareRoutes(otherApp);
+
+    expect((await patchShare(app, environment, "memo_source", { slug: "team-handbook" })).status).toBe(200);
+    expect((await patchShare(app, environment, "memo_source", { slug: null })).status).toBe(200);
+    await app.request("/api/v1/memos/memo_source/share", { method: "DELETE" }, environment);
+
+    const takeover = await patchShare(otherApp, environment, "memo_other", { slug: "team-handbook" });
+    expect(takeover.status).toBe(409);
+    expect((await takeover.json()).error.code).toBe("share_slug_taken");
+    expect((await app.request("/api/public/shares/team-handbook", {}, environment)).status).toBe(404);
+    expect((await patchShare(app, environment, "memo_target", { slug: "team-handbook" })).status).toBe(200);
+    sqlite.close();
+  });
+
+  test("keeps the password gate and scopes the unlock grant to the custom address", async () => {
+    const { sqlite, environment } = createDatabaseEnvironment();
+    sqlite.query("INSERT INTO resources (id, memo_id, object_key, kind, byte_size) VALUES ('res_slug', 'memo_source', 'slug-key', 'image', 10)").run();
+    environment.storage.resources = {
+      get: async () => ({ body: new Blob([new Uint8Array(10)]).stream(), size: 10, writeHttpMetadata: () => {} }),
+    };
+    const app = createShareApp(environment);
+    const protectedShare = (await (await patchShare(app, environment, "memo_source", { passwordProtected: true })).json()).share;
+    const renamed = (await (await patchShare(app, environment, "memo_source", { slug: "locked-note" })).json()).share;
+    expect(renamed).toMatchObject({ slug: "locked-note", passwordProtected: true, password: protectedShare.password });
+
+    const base = "/api/public/shares/locked-note";
+    expect((await app.request(base, {}, environment)).status).toBe(403);
+    expect((await app.request(`${base}/resources/res_slug/blob`, {}, environment)).status).toBe(403);
+    const unlocked = await app.request(`${base}/unlock`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: protectedShare.password }),
+    }, environment);
+    expect(unlocked.status).toBe(200);
+    expect(unlocked.headers.get("Set-Cookie")).toContain(`Path=${base}`);
+    const headers = { Cookie: `ee_share=${readCookieValue(unlocked, "ee_share")}` };
+    expect((await app.request(base, { headers }, environment)).status).toBe(200);
+    expect((await app.request(`${base}/resources/res_slug/blob`, { headers }, environment)).status).toBe(200);
+    sqlite.close();
+  });
 });

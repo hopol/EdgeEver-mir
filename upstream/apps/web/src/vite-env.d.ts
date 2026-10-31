@@ -25,6 +25,8 @@ interface DesktopGlobalShortcutBinding {
 interface DesktopGlobalShortcutState {
   binding: DesktopGlobalShortcutBinding | null;
   registered: boolean;
+  screenshot: DesktopGlobalShortcutBinding | null;
+  screenshotRegistered: boolean;
   error?: "invalid" | "unavailable" | "saveFailed";
 }
 
@@ -36,7 +38,17 @@ interface DesktopLoginItemState {
   error?: "invalid" | "saveFailed";
 }
 
+/** A main-window sync result for the note shown in a note window. */
+interface DesktopNoteWindowSyncUpdate {
+  failed: number;
+  conflicted: number;
+  /** The note as acknowledged by this sync, when it was part of it. */
+  memo: import("@edgeever/shared").MemoDetail | null;
+}
+
 interface EdgeEverDesktopBridge {
+  backup<A extends keyof import("@edgeever/shared").DesktopBackupActions>(action: A, input?: import("@edgeever/shared").DesktopBackupActions[A]["input"]): Promise<import("@edgeever/shared").DesktopBackupActions[A]["output"]>;
+  onBackupStatus(callback: (status: import("@edgeever/shared").DesktopBackupStatus | null) => void): () => void;
   isAvailable: boolean;
   canClearLocalData: boolean;
   recoveredAfterAbnormalExit: boolean;
@@ -46,6 +58,7 @@ interface EdgeEverDesktopBridge {
   copyText(value: string): Promise<boolean>;
   copyHtml(html: string, plainText: string): Promise<boolean>;
   copyImage(bytes: Uint8Array): Promise<boolean>;
+  copyFile(bytes: Uint8Array, filename: string): Promise<boolean>;
   readClipboard?(): Promise<{ html: string; text: string; images: Uint8Array[] }>;
   setSessionToken(value: string): Promise<{ stored: boolean }>;
   clearSessionToken(): Promise<{ stored: false }>;
@@ -53,6 +66,13 @@ interface EdgeEverDesktopBridge {
   uploadPicGoImage(input: {
     endpoint: string; serverKey?: string; bytes: Uint8Array; filename: string; mimeType: string;
     copy: import("@/lib/picgo").PicGoFailureCopy;
+  }): Promise<{ url: string } | { fallback: true }>;
+  testImgBedConnection?(input: { endpoint: string; token: string; uploadFolder: string; nameType: import("@/lib/imgbed").ImgBedNameType;
+    uploadChannel: import("@/lib/imgbed").ImgBedUploadChannel; serverCompress: boolean }): Promise<boolean>;
+  uploadImgBedImage?(input: {
+    endpoint: string; token: string; uploadFolder: string; nameType: import("@/lib/imgbed").ImgBedNameType;
+    uploadChannel: import("@/lib/imgbed").ImgBedUploadChannel; serverCompress: boolean;
+    bytes: Uint8Array; filename: string; mimeType: string; copy: import("@/lib/picgo").PicGoFailureCopy;
   }): Promise<{ url: string } | { fallback: true }>;
   publicNetworkFetch(requestId: string, input: import("@edgeever/shared").PluginPublicFetchRequest): Promise<import("@edgeever/shared").PluginPublicFetchResponse>;
   cancelPublicNetworkFetch(requestId: string): Promise<void>;
@@ -91,6 +111,7 @@ interface EdgeEverDesktopBridge {
   }>;
   globalShortcut(): Promise<DesktopGlobalShortcutState>;
   setGlobalShortcut(binding: DesktopGlobalShortcutBinding | null): Promise<DesktopGlobalShortcutState>;
+  setScreenshotShortcut(binding: DesktopGlobalShortcutBinding | null): Promise<DesktopGlobalShortcutState>;
   loginItem(): Promise<DesktopLoginItemState | null>;
   setLoginItem(patch: { openAtLogin?: boolean; launchMode?: "window" | "tray" }): Promise<DesktopLoginItemState | null>;
   captureGlobalShortcut(capturing: boolean): Promise<boolean>;
@@ -114,6 +135,18 @@ interface EdgeEverDesktopBridge {
   readResource(id: string): Promise<{ type: string; bytes: Uint8Array }>;
   removeStagedResource(id: string): Promise<void>;
   onCommand(callback: (command: string) => void): () => void;
+  noteWindows?(): Promise<string[]>;
+  openNoteWindow?(memoId: string): Promise<{ opened: boolean }>;
+  focusNoteWindow?(memoId: string): Promise<boolean>;
+  onNoteWindowsChanged?(callback: (memoIds: string[]) => void): () => void;
+  onNoteWindowCloseRequest?(callback: () => void): () => void;
+  resolveNoteWindowClose?(allowed: boolean): void;
+  notifyNoteWindowSaved?(): void;
+  notifyNoteWindowReady?(): void;
+  notifyNoteWindowLoadFailed?(): void;
+  sendNoteWindowSync?(memoId: string, update: DesktopNoteWindowSyncUpdate): void;
+  onNoteWindowSync?(callback: (update: DesktopNoteWindowSyncUpdate) => void): () => void;
+  openMemoInMainWindow?(memoId: string): Promise<boolean>;
   setRichTextHeadingShortcutActive?(active: boolean): void;
   onHeadingShortcut?(callback: (level: number) => void): () => void;
   onHibernatePrepare?(callback: () => void | Promise<void>): () => void;

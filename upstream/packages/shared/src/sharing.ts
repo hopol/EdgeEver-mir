@@ -7,12 +7,22 @@ import type { NotebookSiteSettings } from "./notebook-site";
 export type MemoShare = {
   memoId: string;
   token: string;
+  /** Owner-chosen public address. The token link keeps working alongside it. */
+  slug: string | null;
   createdAt: string;
   updatedAt: string;
   passwordProtected: boolean;
+  /** Independent standalone-page controls; both default to visible. */
+  showUpdatedAt: boolean;
+  showBranding: boolean;
   /** Plaintext is returned only immediately after the owner enables or regenerates a password. */
   password?: string;
 };
+
+export { isValidMemoShareSlug, MEMO_SHARE_SLUG_MAX_LENGTH, MEMO_SHARE_SLUG_PATTERN, RESERVED_MEMO_SHARE_SLUGS } from "./share-slug";
+
+/** Path segment for the public link: the custom address when set, otherwise the token. */
+export const memoSharePathSegment = (share: Pick<MemoShare, "slug" | "token">) => share.slug ?? share.token;
 
 export type ManagedMemoShare = MemoShare & {
   memoTitle: string | null;
@@ -72,6 +82,9 @@ export type PublicMemoShare = {
   bodyFont: PublishedNoteBodyFont | null;
   /** Account reading settings for the article body. Column width stays on the author's editor. */
   prose: PublicNoteProse;
+  /** Older servers and notebook shares may omit these; omission means visible. */
+  showUpdatedAt?: boolean;
+  showBranding?: boolean;
 };
 
 const RESOURCE_URL_PATTERN =
