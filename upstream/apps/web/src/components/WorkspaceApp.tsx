@@ -1,3 +1,5 @@
+import { DesktopAttachmentWritebacks } from "./attachments/DesktopAttachmentWritebacks";
+import { useNoteImport } from "@/lib/note-import/use-note-import";
 import { NotebookAppearanceDialog } from "./dialogs/NotebookAppearanceDialog";
 import type { NotebookUpdateInput } from "@edgeever/shared";
 import { startPosterClientRenderer } from "@/lib/poster-client-render";
@@ -82,9 +84,12 @@ import {
   getMemoIdsNeedingMove,
   getCreateMemoNotebookId,
   resolveSelectionMoveTargetNotebookId,
+  readMemoSortPreference,
+  writeMemoSortPreference,
 } from "@/lib/app-helpers";
 import { useBrowserBackLayer } from "@/lib/app-hooks";
-import { updateMemoSummaryInLists } from "@/lib/memo-list-cache";
+import { createFocusFullscreen } from "@/lib/focus-fullscreen";
+import { sortDesktopTitleMemoSummaries, updateMemoSummaryInLists } from "@/lib/memo-list-cache";
 import {
   cacheMemoDetail,
   evictIdleMemoDetails,
@@ -563,9 +568,11 @@ export const WorkspaceApp = ({
   const [noteReadingProtectionToggleToken, setNoteReadingProtectionToggleToken] = useState(0);
   const [noteEditorModeToggleToken, setNoteEditorModeToggleToken] = useState(0);
   const [noteOutlineToggleToken, setNoteOutlineToggleToken] = useState(0);
+  const [noteTitleFocusToken, setNoteTitleFocusToken] = useState(0);
+  const [noteBodyFocusToken, setNoteBodyFocusToken] = useState(0);
   const [search, setSearch] = useState("");
   const [memoFilterMode, setMemoFilterMode] = useState<MemoFilterMode>("all");
-  const [memoSortMode, setMemoSortMode] = useState<MemoSortMode>("updated-desc");
+  const [memoSortMode, setMemoSortMode] = useState<MemoSortMode>(readMemoSortPreference);
   const [mobileEditorReturnPreview, setMobileEditorReturnPreview] = useState<MobileEditorReturnPreview | null>(() =>
     readMobileEditorReturnPreview(route.mobileEditorReturnMemoId)
   );
@@ -650,6 +657,8 @@ export const WorkspaceApp = ({
       invalidateWorkspaceQueries,
     });
   }, [invalidateWorkspaceQueries, repository, runQueuedSync, syncSummary.total]);
+
+  const noteImport = useNoteImport(authRequired ? user?.id ?? null : null, user?.displayName || user?.username || "Local", async () => { await refreshWorkspaceFromServer("manual"); });
 
   const refreshedBackupRestores = useRef(new Set<string>());
   useEffect(() => {
@@ -1149,8 +1158,11 @@ export const WorkspaceApp = ({
       }
     }
 
-    return Array.from(memoMap.values());
-  }, [memosQuery.data?.pages, mobileEditorReturnPreview]);
+    const loadedMemos = Array.from(memoMap.values());
+    return window.edgeeverDesktop?.isAvailable && (memoSortMode === "title-asc" || memoSortMode === "title-desc")
+      ? sortDesktopTitleMemoSummaries(loadedMemos, memoSortMode)
+      : loadedMemos;
+  }, [memosQuery.data?.pages, mobileEditorReturnPreview, memoSortMode]);
   const totalMemoCount = memosQuery.data?.pages[0]?.totalCount ?? memos.length;
   const handleLoadMoreMemos = useCallback(() => {
     if (!memosQuery.hasNextPage || memosQuery.isFetchingNextPage) {
@@ -2671,6 +2683,7 @@ export const WorkspaceApp = ({
   const handleSortModeChange = (mode: MemoSortMode) => {
     if (mode !== memoSortMode) clearPendingMemoSelection();
     setMemoSortMode(mode);
+    writeMemoSortPreference(mode);
   };
 
   const clearHiddenMobileSearch = () => {
@@ -2781,11 +2794,29 @@ export const WorkspaceApp = ({
     }
   };
 
+  const focusFullscreenRef = useRef<ReturnType<typeof createFocusFullscreen> | null>(null);
+  useEffect(() => {
+    if (window.edgeeverDesktop?.isAvailable) return;
+    const fullscreen = createFocusFullscreen(document, () => {
+      runWorkspaceViewTransition(() => setDesktopFocusMode(false));
+    });
+    focusFullscreenRef.current = fullscreen;
+    return () => {
+      focusFullscreenRef.current = null;
+      fullscreen.dispose();
+    };
+  }, [setDesktopFocusMode]);
+
+  useEffect(() => {
+    if (!desktopFocusModeActive) focusFullscreenRef.current?.setEnabled(false);
+  }, [desktopFocusModeActive]);
+
   const updateDesktopFocusMode = useCallback((enabled: boolean) => {
+    focusFullscreenRef.current?.setEnabled(enabled);
     runWorkspaceViewTransition(() => {
       setDesktopFocusMode(enabled);
     });
-  }, []);
+  }, [setDesktopFocusMode]);
 
   const toggleDesktopFocusMode = useCallback(() => {
     updateDesktopFocusMode(!desktopFocusModeActive);
@@ -3048,6 +3079,8 @@ export const WorkspaceApp = ({
         || action === "toggleReadingProtection"
         || action === "toggleEditorMode"
         || action === "toggleOutline"
+        || action === "focusTitle"
+        || action === "focusBody"
         || action === "openPreviousMemo"
         || action === "openNextMemo"
       ) {
@@ -3069,6 +3102,10 @@ export const WorkspaceApp = ({
           setNoteEditorModeToggleToken((value) => value + 1);
         } else if (action === "toggleOutline") {
           setNoteOutlineToggleToken((value) => value + 1);
+        } else if (action === "focusTitle") {
+          setNoteTitleFocusToken((value) => value + 1);
+        } else if (action === "focusBody") {
+          setNoteBodyFocusToken((value) => value + 1);
         } else {
           const targetMemoId = action === "openPreviousMemo" ? previousMemoId : nextMemoId;
           if (targetMemoId) {
@@ -3355,6 +3392,7 @@ export const WorkspaceApp = ({
   return (
     <WorkspaceMotionProvider>
       <div className="edgeever-workspace-shell flex h-[100dvh] overflow-hidden text-slate-950">
+      <DesktopAttachmentWritebacks scope={localDataScope} />
       {(wechatImportsInProgress > 0 || sharedFileImportsInProgress > 0) && (
         <div className="pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center" role="status" aria-live="polite">
           <div className="rounded-full border border-slate-200 bg-card px-4 py-2 text-sm font-medium text-slate-700 shadow-lg">
@@ -3681,6 +3719,7 @@ export const WorkspaceApp = ({
                     demoMode={demoMode}
                     isOwner={authRequired && user?.role === "owner"}
                     user={user}
+                    noteImport={noteImport}
                     refreshWorkspaceAfterImport={async () => {
                       await refreshWorkspaceFromServer("manual");
                     }}
@@ -3894,6 +3933,7 @@ export const WorkspaceApp = ({
                       onOpenExecutionCenter={handleOpenExecutionCenter}
                       memo={selectedMemo}
                       repository={repository}
+                      localDataScope={localDataScope}
                       pluginHost={pluginHost}
                       pluginNavigationRequest={pluginNavigationRequest}
                     onOpenAiPrompts={handleOpenAiPrompts}
@@ -3922,6 +3962,8 @@ export const WorkspaceApp = ({
                     readingProtectionToggleToken={noteReadingProtectionToggleToken}
                     editorModeToggleToken={noteEditorModeToggleToken}
                     outlineToggleToken={noteOutlineToggleToken}
+                    titleFocusToken={noteTitleFocusToken}
+                    bodyFocusToken={noteBodyFocusToken}
                     shortcutSettings={shortcutSettings}
                     onSyncRequested={syncMemosManually}
                     documentActionRequest={memoDocumentActionRequest}

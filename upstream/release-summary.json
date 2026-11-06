@@ -1,23 +1,32 @@
 {
-  "version": "2.16.1",
+  "version": "2.21.0",
   "changes": {
     "en-US": [
-      "Preserve unsaved mind-map, flowchart and architecture edits during synchronization, including new-note creation. Thanks @sivdead (#742); fixes #737.",
-      "Preserve infographic drafts and active input during synchronization, and refresh remote changes when the editor is idle.",
-      "Reduce database reads during backups while preserving consistency checks, and improve desktop backup network diagnostics.",
-      "Reduce repeated database counts during pagination, exports, synchronization and task-history polling. Upgrading the server applies migration 0084 with a one-time task-count backfill."
+      "On desktop, save changes made in external apps back to the original attachment. This requires an updated server. Thanks @LuoQianhong (#789).",
+      "AI automatically adjusts the output budget using detected model limits and warns when a response is cut short. Update your server to enable automatic budgets. Thanks @yulei666 (#791).",
+      "Drag and drop files into the redesigned third-party note import dialog for Evernote, Obsidian, and Joplin.",
+      "Fixed Mermaid toolbars overlapping diagrams and labels being clipped at some zoom levels.",
+      "Signing out of the desktop app now removes saved login credentials.",
+      "Change your password in a dedicated dialog. The sign-in, two-factor authentication, custom CSS, and connection status screens have clearer styling.",
+      "The demo welcome note now shows the architecture diagram horizontally."
     ],
     "zh-CN": [
-      "修复思维导图、流程图及架构图在同步和新建笔记时丢失未保存编辑的问题。感谢 @sivdead（#742）；修复 #737。",
-      "修复信息图同步时的草稿与输入丢失问题，并在空闲时正确显示远端更新。",
-      "减少备份过程中的数据库读取，保留一致性检查，并改善桌面备份网络故障诊断。",
-      "减少分页、导出、同步和任务历史轮询中的重复数据库计数。服务端升级会执行迁移 0084，一次性回填任务计数。"
+      "桌面端可将外部应用中保存的修改回存到原附件，需要先升级服务端。感谢 @LuoQianhong（#789）。",
+      "AI 根据探测到的模型限制自动调整输出预算，并在回复截断时提示。升级服务端后可使用自动预算。感谢 @yulei666（#791）。",
+      "更新了第三方笔记导入窗口，可拖放文件导入印象笔记、Obsidian 和 Joplin 导出内容。",
+      "修复 Mermaid 工具栏遮住图表，以及部分缩放比例下文字被裁切的问题。",
+      "桌面端退出登录时会移除已保存的登录凭据。",
+      "可在独立弹窗中修改密码，并优化了登录、双重验证、自定义 CSS 和连接状态的显示。",
+      "Demo 欢迎笔记中的架构图改为横向布局。"
     ],
     "ja": [
-      "同期中や新規ノート作成時に、マインドマップ・フローチャート・構成図の未保存の編集が失われる問題を修正しました。",
-      "インフォグラフィックの同期中に下書きや入力が失われる問題を修正し、編集中でない場合はリモートの変更を正しく反映します。",
-      "バックアップの整合性チェックを維持しながらデータベース読み取りを削減し、デスクトップのネットワーク障害診断を改善しました。",
-      "ページ送り・エクスポート・同期・タスク履歴のポーリング時の重複集計を削減しました。サーバー更新時にマイグレーション0084でタスク件数を一度だけ集計します。"
+      "デスクトップでは、外部アプリで保存した変更を元の添付ファイルに反映できます。サーバーの更新が必要です。",
+      "検出したモデルの上限に応じてAIの出力枠を自動調整し、回答が途中で切れた場合は通知します。自動調整にはサーバーの更新が必要です。",
+      "新しいインポート画面では、Evernote、Obsidian、Joplinのファイルをドラッグ＆ドロップできます。",
+      "Mermaidのツールバーが図に重なり、一部の拡大率でラベルが切れる問題を修正しました。",
+      "デスクトップアプリからログアウトすると、保存済みのログイン情報が削除されます。",
+      "専用ダイアログでパスワードを変更できます。ログイン、二要素認証、カスタムCSS、接続状態の表示も改善しました。",
+      "デモのウェルカムノートでは、構成図を横向きに表示します。"
     ]
   }
 }

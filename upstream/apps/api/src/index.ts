@@ -6,6 +6,7 @@ import {
   normalizeTags,
 } from "@edgeever/shared";
 import { Hono } from "hono";
+import { registerImportContextGuard, registerImportRoutes } from "./import-routes";
 import { cors } from "hono/cors";
 import { resolveContainerImageSource } from "./container-image-source";
 import apiProbe from "../../../docs/openapi.json";
@@ -164,7 +165,7 @@ app.use(
   "/api/*",
   cors({
     origin: API_CORS_ORIGINS,
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "x-edgeever-import-context"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   })
@@ -315,15 +316,26 @@ app.use("/api/v1/*", async (c, next) => {
     return;
   }
 
-  const auth = await authenticateRequest(c, true);
+  const auth = await authenticateRequest(c, true, { allowMfaRestricted: true });
 
   if (!auth) {
     return unauthorized(c, "Authentication required.");
   }
 
+  if (auth.mfaRestricted) {
+    return apiError(
+      c,
+      "mfa_rebind_required",
+      "Bind a new authenticator to finish signing in with a recovery code.",
+      403,
+    );
+  }
+
   c.set("auth", auth);
   await next();
 });
+
+registerImportContextGuard(app);
 
 registerObjectStorageRoutes(app, {
   isDemoMode: (...args) => isDemoMode(...args),
@@ -348,6 +360,7 @@ registerSyncRoutes(app, {
   clampNumber: (...args) => clampNumber(...args),
   mapMemoDetail: (...args) => mapMemoDetail(...args),
 });
+registerImportRoutes(app);
 registerTagRoutes(app);
 registerPosterRenderRoutes(app);
 registerPluginDistributionRoutes(app);
