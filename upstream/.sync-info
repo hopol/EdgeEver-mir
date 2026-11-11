@@ -1,5 +1,5 @@
-commit=86bf60ee01e9240fa6cc8fbcd1e7e37f16af0f0f
-timestamp=2026-11-06T08:48:17Z
+commit=94813fe7e7685eae94b662414248f72be8a307fa
+timestamp=2026-11-11T08:40:53Z
 upstream_url=https://github.com/tianma-if/edgeever
 upstream_branch=main
-version=2.21.0
+version=2.25.0

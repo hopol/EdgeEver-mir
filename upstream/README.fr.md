@@ -3,12 +3,12 @@
     <img src="assets/brand/edgeever-icon.svg" alt="Logo EdgeEver" width="48" align="absmiddle" /> EdgeEver
   </h1>
   <p>
-    <b>Base de connaissances native pour l'IA et alternative à Evernote/Obsidian avec synchronisation instantanée et MCP natif. Gratuit sur Cloudflare ou auto-hébergé avec Docker.</b>
+    <b>Base de connaissances native pour l'IA et alternative à Evernote/Obsidian. Synchronisation instantanée multiplateforme, notes riches (tableaux, cartes mentales, diagrammes, posters), web clipper et MCP. 100 % gratuit sur Cloudflare ou avec Docker.</b>
   </p>
   <p>
     <a href="https://github.com/tianma-if/edgeever/stargazers"><img src="https://img.shields.io/github/stars/tianma-if/edgeever?style=social" alt="GitHub Stars" /></a>
     <a href="https://github.com/tianma-if/edgeever/network/members"><img src="https://img.shields.io/github/forks/tianma-if/edgeever?style=social" alt="GitHub Forks" /></a>
-    <a href="https://github.com/tianma-if/edgeever"><img src="https://img.shields.io/badge/Git_Clones-40K%2B%20%2F%2014d-brightgreen?style=social&logo=git" alt="Clones Git" /></a>
+    <a href="https://github.com/tianma-if/edgeever/releases"><img src="https://img.shields.io/github/downloads/tianma-if/edgeever/total?style=social&amp;logo=github&amp;label=Release%20Downloads" alt="Téléchargements des fichiers de GitHub Releases" /></a>
     <a href="https://github.com/tianma-if/edgeever/pkgs/container/edgeever"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fghcr-badge.elias.eu.org%2Fapi%2Ftianma-if%2Fedgeever%2Fedgeever&query=downloadCount&style=social&logo=docker&label=Docker%20Pulls" alt="Téléchargements Docker" /></a>
     <a href="https://www.producthunt.com/products/edgeever?utm_source=other&utm_medium=social"><img src="https://img.shields.io/badge/Product%20Hunt-ea532a?style=social&logo=product-hunt" alt="Product Hunt" /></a>
     <a href="https://hellogithub.com/repository/tianma-if/edgeever" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=150fee4403f6433880bda91e9576ac06&claim_uid=TWNAjisURpnhL1l&theme=small" alt="À l'honneur sur HelloGitHub" /></a>
@@ -20,6 +20,7 @@
   <p>
     <a href="https://t.me/+GvKYnL37feUwOTNl"><img src="assets/readme/community/telegram.svg" alt="Telegram" width="16" height="16" align="absmiddle" /> Groupe Telegram</a> &nbsp;|&nbsp;
     <a href="https://demo.edgeever.org">🌐 Démo en ligne</a> &nbsp;|&nbsp;
+    <a href="https://github.com/users/tianma-if/projects/1">🗺️ Feuille de route</a> &nbsp;|&nbsp;
     <a href="#all-platform-clients--browser-extension">📱 Clients et extension</a> &nbsp;|&nbsp;
     <a href="#features">Matrice des fonctionnalités et capacités</a> &nbsp;|&nbsp;
     <a href="docs/note-migration-guide.en-US.md">📥 Migration de notes</a>
@@ -180,6 +181,8 @@ Que ce soit pour des sauvegardes régulières, une migration sans heurts entre i
 ### Intégration IA et protocole MCP
 
 Générez un jeton d'API dans **Profil** -> **API / MCP** et copiez la configuration Remote MCP en un clic pour permettre à des agents IA comme Claude Code, Cursor, Antigravity et OpenClaw de gérer votre base de connaissances en toute sécurité selon les autorisations de votre compte. EdgeEver prend en charge le cycle complet CRUD pour les notes textuelles, les notes de diagrammes visuels (cartes mentales, organigrammes et schémas d'architecture), les notes de tableaux structurés et les notes poster natives. Les agents peuvent également organiser l'arborescence des carnets, les étiquettes, les pièces jointes, l'historique des versions, les modèles de notes et les instructions IA.
+
+Pour la configuration des clients, les niveaux d'accès des jetons, le dépannage et des règles suggérées pour les agents, consultez [Using EdgeEver with MCP clients](docs/mcp-guide.md) (en anglais).
 
 > 💡 **Inspiration :**
 > Faites de l'IA votre véritable chef d'orchestre des connaissances et votre copilote créatif : transformez instantanément des concepts en cartes mentales interactives, organigrammes, diagrammes d'architecture et tableaux structurés, tout en fournissant un contexte privé à vos agents IA. Associé à l'éditeur de texte enrichi performant et à la typographie soignée d'EdgeEver, le contenu assisté par IA devient un ensemble de connaissances élégamment structuré, soigné et prêt pour la publication.
