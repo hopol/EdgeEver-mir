@@ -166,7 +166,7 @@ interface EdgeEverDesktopBridge {
     scheduledFor: string;
   }) => void | Promise<void>): () => void;
   onImportMarkdown(callback: (payload: { name: string; content: string }) => void): () => void;
-  onImportScreenshot?(callback: (payload: { captureId?: string; name: string; type: string; title?: string; bytes: Uint8Array }) => void): () => void;
+  onImportScreenshot?(callback: (payload: import("@/lib/desktop-screenshot-import").DesktopScreenshotPayload) => void): () => void;
   readWeChatImportMedia?(importId: string, mediaId: string): Promise<{ filename: string; mimeType: string; bytes: Uint8Array }>;
   finishWeChatImport?(importId: string, success: boolean): Promise<void>;
   retryWeChatImport?(importId: string): Promise<boolean>;
@@ -179,9 +179,13 @@ interface EdgeEverDesktopBridge {
     version?: string;
     managed?: boolean;
     updateError?: string;
+    customPath?: string;
+    antigravityMode?: "standalone" | "cli";
     authMethods?: Array<{ id: string; name: string }>;
   }>>;
+  setAcpAdapterMode?(mode: "standalone" | "cli"): Promise<boolean>;
   chooseAcpAdapterPath?(): Promise<string | null>;
+  clearAcpAdapterPath?(): Promise<boolean>;
   probeAcpAdapter?(input: { id: "codex" | "claudeCode" | "antigravity" | "openClaw" | "hermesAgent" | "grokBuild" | "deepseekHarness" | "piAgent" | "workbuddyCn" | "workbuddyIntl" | "codebuddy"; path?: string }): Promise<{
     id: "codex" | "claudeCode" | "antigravity" | "openClaw" | "hermesAgent" | "grokBuild" | "deepseekHarness" | "piAgent" | "workbuddyCn" | "workbuddyIntl" | "codebuddy";
     label: string;
@@ -234,18 +238,7 @@ interface EdgeEverDesktopBridge {
     | { requestId: string; type: "done" }
     | { requestId: string; type: "error"; message: string }
   ) => void): () => void;
-  onImportWeChatChat?(callback: (payload: {
-    ok: boolean;
-    kind?: "file";
-    reason?: string;
-    importId?: string;
-    title?: string;
-    filename?: string;
-    mimeType?: string;
-    byteSize?: number;
-    markdown?: string;
-    media?: Array<{ id: string; filename: string; mimeType: string; byteSize: number }>;
-  }) => void): () => void;
+  onImportWeChatChat?(callback: (payload: import("@/lib/desktop-share-import").DesktopSharePayload) => void): () => void;
 }
 
 interface DesktopUpdateNetworkDiagnostic {

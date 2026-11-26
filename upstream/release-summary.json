@@ -1,29 +1,29 @@
 {
-  "version": "2.31.0",
+  "version": "2.32.0",
   "changes": {
     "en-US": [
-      "Restrict API tokens to selected notebooks and their sub-notebooks, with read-only or read/write access. Existing tokens retain their access.",
-      "Import individual Markdown files or folders. Folder imports preserve subfolders and resolve local attachments and links between notes.",
-      "Save named views with filters and multi-column sorting in structured tables, scroll large tables more smoothly, and open URLs directly from link cells.",
-      "Fix selecting Joplin .jex files in mobile browsers and prevent Evernote task titles and dates from appearing in imported note text.",
-      "Refresh the EdgeEver logo and app icons, update the Demo example notes, and refine separators in merged notes.",
-      "Reduce redundant sync and plugin requests, and preserve active authentication settings by default when redeploying to Cloudflare."
+      "Desktop users can choose Antigravity Standalone or the agy CLI and clear a custom executable path. Thanks @yulei666 (#878).",
+      "Android loads smaller previews for images in notes. Full-screen viewing and downloads still use the original image. Thanks @flipcyde101 (#875, related to #869).",
+      "Poster rendering now uses server notifications, reducing requests from idle clients. For self-hosted instances, upgrade the server and clients together to use notifications.",
+      "Public share outlines show long headings in full and jump to sections in one click. Shared notebooks can sort titles in either direction, with numbers in natural order.",
+      "Web and desktop tables size columns to their content and show clearer alternating row shading. Thanks @geekqq (#884).",
+      "On Windows, headings that mix Japanese and Latin text use more consistent font weights. Thanks @Golden007-prog (#890)."
     ],
     "zh-CN": [
-      "API Token 可限制在指定笔记本及其子笔记本内，并设为只读或读写。现有 Token 保留原有权限。",
-      "支持导入单个 Markdown 文件或整个目录。目录导入保留子目录层级，并解析本地附件和笔记间链接。",
-      "多维表格支持保存带筛选和多字段排序的命名视图，大表格滚动更流畅，链接字段可直接点击打开。",
-      "修复移动浏览器中无法选择 Joplin .jex 文件的问题，并避免 Evernote 任务标题和日期混入导入后的笔记正文。",
-      "更新 EdgeEver 标志、应用图标和 Demo 示例笔记，并调整合并笔记的分隔线。",
-      "减少重复同步和插件请求，重新部署到 Cloudflare 时默认保留正在生效的登录配置。"
+      "桌面端可以在 Antigravity 独立版与 agy CLI 之间切换，也可以清除自定义可执行文件路径。感谢 @yulei666（#878）。",
+      "Android 笔记内的图片使用缩略图，全屏查看和下载仍使用原图。感谢 @flipcyde101（#875，关联 #869）。",
+      "海报渲染改由服务端通知，减少客户端空闲时的请求。自托管用户需同时更新服务端和客户端以使用通知。",
+      "公开分享页的大纲会完整显示长标题，点击一次即可跳转。分享笔记本支持按标题升序或降序排列，标题中的数字按自然顺序排序。",
+      "Web 和桌面端表格按内容调整列宽，交替行底色更清晰。感谢 @geekqq（#884）。",
+      "Windows 上混排日文和拉丁字母的标题字重更一致。感谢 @Golden007-prog（#890）。"
     ],
     "ja": [
-      "APIトークンの対象を指定したノートブックとその子ノートブックに限定し、読み取り専用または読み書き権限を設定できます。既存のトークンの権限は維持されます。",
-      "Markdownファイルやフォルダをインポートできます。フォルダの階層を保ち、ローカル添付ファイルとノート間リンクを解決します。",
-      "構造化テーブルでフィルターと複数列の並べ替えを名前付きビューとして保存できます。大きなテーブルのスクロールを改善し、リンクセルからURLを直接開けるようにしました。",
-      "モバイルブラウザーでJoplinの.jexファイルを選択できない問題と、Evernoteのタスク名や日付がインポート後のノート本文に混入する問題を修正しました。",
-      "EdgeEverのロゴ、アプリアイコン、デモのサンプルノートを更新し、結合したノートの区切り線を調整しました。",
-      "同期とプラグインの重複リクエストを削減し、Cloudflareへの再デプロイ時に有効な認証設定を既定で保持します。"
+      "デスクトップ版で Antigravity 単体版と agy CLI を切り替え、カスタム実行ファイルのパスを解除できます。",
+      "Android のノート内画像は縮小プレビューを読み込み、全画面表示とダウンロードでは元の画像を使用します。",
+      "ポスター生成をサーバー通知に切り替え、待機中のリクエストを減らしました。セルフホスト環境ではサーバーとクライアントを更新してください。",
+      "公開ページの目次では長い見出しが全文表示され、ワンクリックで移動できます。共有ノートブックは数字を自然順で扱い、タイトルの昇順・降順で並べ替えられます。",
+      "Web 版とデスクトップ版の表は内容に合わせて列幅を調整し、行の交互色が見やすくなりました。",
+      "Windows で日本語とラテン文字が混在する見出しの太さを揃えました。"
     ]
   }
 }

@@ -96,8 +96,7 @@ import {
 import { assertScope, getActorLabel, getAuditActor } from "./request-auth";
 import {
   assertNotebookAccess,
-  notebookIdsBind,
-  notebookInListSql,
+  assertMemoNotebookWriteAccess,
   resolveNotebookAccess,
   type NotebookAccess,
 } from "./token-notebook-access";
@@ -302,30 +301,8 @@ export const callMcpTool = async (
   };
   const assertTemplatesAllowed = () => assertWorkspaceResourcesAllowed("note templates");
 
-  const assertBulkMemoAccess = async (
-    memoIds: string[],
-    deletedState: 0 | 1,
-    action: string,
-  ) => {
-    if (!notebookAccess.restricted || memoIds.length === 0) return;
-    // One targeted query for the whole list: loading full memo details per
-    // memo would blow D1's per-request query budget on large batches. The id
-    // list is passed as a single JSON bind through json_each so the statement
-    // stays within D1's per-statement bound-parameter limit even at the
-    // maximum batch size (per-id placeholders would exceed it past ~98 ids).
-    const uniqueIds = Array.from(new Set(memoIds));
-    const rows = await c.env.storage.db.prepare(
-      `SELECT id, notebook_id FROM memos
-       WHERE workspace_id = ? AND is_deleted = ? AND ${notebookInListSql("id", uniqueIds)}`,
-    ).bind(auth.workspaceId, deletedState, notebookIdsBind(uniqueIds))
-      .all<{ id: string; notebook_id: string }>();
-
-    // Missing ids are not authorized here: the bulk service validates
-    // existence itself and throws its own error for them.
-    for (const row of rows.results) {
-      assertNotebookAccess(notebookAccess, "write", row.notebook_id, action);
-    }
-  };
+  const assertBulkMemoAccess = (memoIds: string[], deletedState: 0 | 1, action: string) =>
+    assertMemoNotebookWriteAccess(c.env.storage.db, auth.workspaceId, memoIds, notebookAccess, action, deletedState);
 
   switch (name) {
     case "get_current_user": {
@@ -622,7 +599,15 @@ export const callMcpTool = async (
       const renderMemo = await getMemoDetail(c.env.storage.db, auth.workspaceId, getRequiredString(args.memoId, "memoId"));
       if (!renderMemo) throw new AppError("not_found", "Memo not found", 404);
       assertMemoAccess(renderMemo, "write", "request a poster render");
-      return requestPosterRender(c.env.storage.db, auth.workspaceId, renderMemo.id, args.expectedRevision as number, getOptionalString(args.templateId) ?? undefined);
+      const input = {
+        workspace: auth.workspaceId,
+        memoId: renderMemo.id,
+        revision: args.expectedRevision as number,
+        templateId: getOptionalString(args.templateId) ?? undefined,
+      };
+      return c.env.enqueuePosterRender
+        ? c.env.enqueuePosterRender(input)
+        : requestPosterRender(c.env.storage.db, input);
     }
     case "get_poster_render_job": {
       assertScope(auth, "read:memos");
